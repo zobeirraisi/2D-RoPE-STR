@@ -121,12 +121,7 @@ python run_ablations.py --study cross --iters 30000 --train_sources MJ --out res
 ## Citation
 
 ```bibtex
-@article{raisi2024rope2d,
-  title={2D Rotary Position Embeddings for Scene Text Recognition},
-  author={Raisi, Zobeir},
-  journal={Pattern Recognition Letters},
-  year={2024}
-}
+
 ```
 
 ## License
