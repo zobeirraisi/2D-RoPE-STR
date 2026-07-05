@@ -116,7 +116,7 @@ python run_ablations.py --study cross --iters 30000 --train_sources MJ --out res
 
 ## Paper
 
-[Link coming once published on Pattern Recognition Letters]
+[Link coming once published]
 
 ## Citation
 
