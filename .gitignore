@@ -20,3 +20,6 @@ data_lmdb_release/
 *.swp
 *.swo
 .DS_Store
+checkpoints_rev1/
+data_fast/
+logs/rev1_queue.*

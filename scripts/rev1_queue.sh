@@ -27,11 +27,13 @@ flock -n 9 || { echo "queue already running"; exit 0; }
 # After a reboot, wait for the data disk (data_lmdb_release is a symlink to it)
 # and the GPU driver.
 for i in $(seq 60); do
-  [ -d data_lmdb_release/training ] && nvidia-smi > /dev/null 2>&1 && break
+  [ -d data_fast/training/MJ ] && [ -d data_fast/evaluation/SVT ] && nvidia-smi > /dev/null 2>&1 && break
   echo "waiting for data disk / GPU ($i)"; sleep 30
 done
 
 PY=.venv/bin/python
+DATA=data_fast              # NVMe copy of training LMDBs (the /mnt HDD starves the GPU);
+                            # evaluation/ is a symlink to the original on /mnt
 CK=checkpoints_rev1          # on the root disk; the data disk is 97% full
 RES=results/rev1
 mkdir -p "$CK" "$RES"
@@ -43,7 +45,7 @@ for s in 0 1 2; do
   stamp "E1 pe seed $s"
   $PY run_ablations.py --study pe --iters 60000 --feature_stride 8 --amp \
       --train_sources MJ ST --seed "$s" --save_dir "$CK" --resume \
-      --out "$RES/abl_pe_s$s.json"
+      --data_root "$DATA" --out "$RES/abl_pe_s$s.json"
 done
 
 # ---------- E3: full-schedule 1D RoPE (same recipe as the Table-2 model) ----------
@@ -53,15 +55,15 @@ RESUME=()
 stamp "E3 $RUN ${RESUME[*]:-}"
 $PY train_2drope_str.py --pe_type 1drope --train_sources MJ ST --iters 300000 \
     --feature_stride 4 --batch_size 128 --accum_steps 2 --amp --seed 0 \
-    --eval_every 0 --save_dir "$CK" --run_name "$RUN" "${RESUME[@]}"
-$PY evaluate.py --checkpoint "$CK/$RUN.pt" --out "$RES/$RUN.json"
+    --eval_every 0 --save_dir "$CK" --run_name "$RUN" --data_root "$DATA" "${RESUME[@]}"
+$PY evaluate.py --checkpoint "$CK/$RUN.pt" --data_root "$DATA" --out "$RES/$RUN.json"
 
 # ---------- E2: 2x2 factorial, 3 seeds ----------
 for s in 0 1 2; do
   stamp "E2 factorial seed $s"
   $PY run_ablations.py --study factorial --iters 60000 --feature_stride 8 --amp \
       --train_sources MJ ST --seed "$s" --save_dir "$CK" --resume \
-      --out "$RES/abl_factorial_s$s.json"
+      --data_root "$DATA" --out "$RES/abl_factorial_s$s.json"
 done
 
 stamp "ALL DONE"

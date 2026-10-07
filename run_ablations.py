@@ -103,6 +103,7 @@ def main():
     ap.add_argument("--feature_stride", type=int, default=8)
     ap.add_argument("--amp", action="store_true")
     ap.add_argument("--num_workers", type=int, default=8)
+    ap.add_argument("--data_root", default="data_lmdb_release")
     ap.add_argument("--seed", type=int, default=None,
                     help="random seed; also appended to run names as _s<seed>")
     ap.add_argument("--configs", nargs="+", default=None,
@@ -118,7 +119,7 @@ def main():
         f"--iters={cli.iters}", f"--batch_size={cli.batch_size}",
         f"--feature_stride={cli.feature_stride}",
         f"--num_workers={cli.num_workers}", "--eval_every=0",
-        f"--save_dir={cli.save_dir}",
+        f"--save_dir={cli.save_dir}", f"--data_root={cli.data_root}",
         "--train_sources", *cli.train_sources,
     ]
     if cli.limit_train:
