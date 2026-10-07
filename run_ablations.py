@@ -65,6 +65,15 @@ STUDIES = {
         "1D RoPE in cross-attn": dict(pe_type="2drope", learnable_freq=True, cross_pe="1drope"),
         "2D-RoPE in cross-attn": dict(pe_type="2drope", learnable_freq=True, cross_pe="2drope"),
     },
+    "factorial": {
+        # 2x2: dimension split x cross-attention keys. All four use the same
+        # pre-norm CrossRoPEDecoderLayer stack (cross_pe="none" is the control),
+        # so the decoder implementation is held fixed across cells.
+        "32:32 + no cross":  dict(pe_type="2drope", learnable_freq=True, dim_split=0.5,  cross_pe="none"),
+        "48:16 + no cross":  dict(pe_type="2drope", learnable_freq=True, dim_split=0.75, cross_pe="none"),
+        "32:32 + 2D cross":  dict(pe_type="2drope", learnable_freq=True, dim_split=0.5,  cross_pe="2drope"),
+        "48:16 + 2D cross":  dict(pe_type="2drope", learnable_freq=True, dim_split=0.75, cross_pe="2drope"),
+    },
 }
 
 
@@ -89,11 +98,15 @@ def main():
     ap.add_argument("--study", required=True, choices=list(STUDIES.keys()))
     ap.add_argument("--iters", type=int, default=30000)
     ap.add_argument("--batch_size", type=int, default=256)
-    ap.add_argument("--train_sources", nargs="+", default=["MJ"])
+    ap.add_argument("--train_sources", nargs="+", default=["MJ", "ST"])
     ap.add_argument("--limit_train", type=int, default=0)
     ap.add_argument("--feature_stride", type=int, default=8)
     ap.add_argument("--amp", action="store_true")
     ap.add_argument("--num_workers", type=int, default=8)
+    ap.add_argument("--seed", type=int, default=None,
+                    help="random seed; also appended to run names as _s<seed>")
+    ap.add_argument("--configs", nargs="+", default=None,
+                    help="optional subset of config labels in the study to run")
     ap.add_argument("--out", default="ablation_results.json")
     ap.add_argument("--save_dir", default="checkpoints")
     ap.add_argument("--resume", action="store_true",
@@ -112,6 +125,8 @@ def main():
         shared += [f"--limit_train={cli.limit_train}"]
     if cli.amp:
         shared += ["--amp"]
+    if cli.seed is not None:
+        shared += [f"--seed={cli.seed}"]
 
     def _ckpt_iter_results(path):
         if not os.path.exists(path):
@@ -121,11 +136,15 @@ def main():
 
     results = {}
     for label, overrides in STUDIES[cli.study].items():
+        if cli.configs and label not in cli.configs:
+            continue
         args = base_args(shared)
         for k, v in overrides.items():
             setattr(args, k, v)
         slug = re.sub(r"[^0-9a-zA-Z]+", "-", label).strip("-").lower()
         args.run_name = f"abl_{cli.study}_{slug}"
+        if cli.seed is not None:
+            args.run_name += f"_s{cli.seed}"
         last_path = os.path.join(cli.save_dir, f"{args.run_name}.pt")
         best_path = os.path.join(cli.save_dir, f"{args.run_name}_best.pt")
 

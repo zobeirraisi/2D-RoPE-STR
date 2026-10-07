@@ -18,7 +18,10 @@ Full reproduction (MJ + SynthText, paper protocol):
 import argparse
 import math
 import os
+import random
 import time
+
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -36,6 +39,25 @@ def cosine_lr(step, total, base_lr, warmup):
         return base_lr * step / max(warmup, 1)
     prog = (step - warmup) / max(total - warmup, 1)
     return 0.5 * base_lr * (1 + math.cos(math.pi * min(prog, 1.0)))
+
+
+def set_seed(seed):
+    """Seed Python, NumPy and PyTorch (CPU + CUDA). Runs are then repeatable in
+    data order, augmentation and initialisation, though not bit-exact on GPU
+    (cuDNN/AMP kernels are not forced to be deterministic)."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def seed_worker(worker_id):
+    # PyTorch gives each worker a distinct torch seed derived from the loader
+    # generator; propagate it to the `random` / NumPy streams used by the
+    # augmentation and the dataset's fallback sampling.
+    ws = torch.initial_seed() % 2**32
+    random.seed(ws)
+    np.random.seed(ws)
 
 
 def infinite(loader):
@@ -87,6 +109,9 @@ def parse_args():
     ap.add_argument("--log_every", type=int, default=100)
     ap.add_argument("--save_dir", default="checkpoints")
     ap.add_argument("--run_name", default=None)
+    ap.add_argument("--seed", type=int, default=None,
+                    help="random seed (Python/NumPy/PyTorch + DataLoader workers); "
+                         "omit for the legacy unseeded behaviour")
     ap.add_argument("--resume", default=None,
                     help="path to a checkpoint to resume from (continues at its saved "
                          "iteration; loads optimizer/scaler state when present)")
@@ -98,7 +123,10 @@ def parse_args():
 
 def run_training(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device} | run: {args.run_name}")
+    seed = getattr(args, "seed", None)
+    if seed is not None:
+        set_seed(seed)
+    print(f"Device: {device} | run: {args.run_name} | seed: {seed}")
     os.makedirs(args.save_dir, exist_ok=True)
 
     converter = LabelConverter(max_len=args.max_len)
@@ -115,9 +143,14 @@ def run_training(args):
             train_set = Subset(train_set, idx.tolist())
     print(f"Training samples: {len(train_set):,}")
 
+    loader_kw = {}
+    if seed is not None:
+        loader_kw = dict(generator=torch.Generator().manual_seed(seed),
+                         worker_init_fn=seed_worker)
     loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                         num_workers=args.num_workers, pin_memory=True,
-                        drop_last=True, persistent_workers=args.num_workers > 0)
+                        drop_last=True, persistent_workers=args.num_workers > 0,
+                        **loader_kw)
 
     model = STRModel(
         vocab_size=converter.vocab_size, pe_type=args.pe_type,
