@@ -23,7 +23,7 @@ import re
 
 import torch
 
-from train_2drope_str import run_training, parse_args as _train_parse
+from train_2drope_str import run_training, load_ckpt_safe, parse_args as _train_parse
 
 
 # Each study maps a label -> dict of overrides applied on top of the base args.
@@ -131,7 +131,9 @@ def main():
     def _ckpt_iter_results(path):
         if not os.path.exists(path):
             return 0, None
-        ck = torch.load(path, map_location="cpu", weights_only=False)
+        ck = load_ckpt_safe(path)
+        if ck is None:
+            return 0, None
         return int(ck.get("iteration", 0)), ck.get("results")
 
     results = {}

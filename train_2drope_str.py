@@ -60,6 +60,29 @@ def seed_worker(worker_id):
     np.random.seed(ws)
 
 
+def atomic_save(obj, path):
+    """Write to <path>.tmp, fsync, then rename: a power cut mid-save leaves the
+    previous checkpoint intact instead of a truncated file."""
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        torch.save(obj, f)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def load_ckpt_safe(path, map_location="cpu"):
+    """Load a checkpoint; if it is unreadable (e.g. written by an older,
+    non-atomic save that was interrupted), move it aside and return None."""
+    try:
+        return torch.load(path, map_location=map_location, weights_only=False)
+    except Exception as e:  # truncated / corrupt file
+        bad = path + ".corrupt"
+        os.replace(path, bad)
+        print(f"  ! could not read {path} ({type(e).__name__}); moved to {bad}")
+        return None
+
+
 def infinite(loader):
     while True:
         for batch in loader:
@@ -144,9 +167,10 @@ def run_training(args):
     print(f"Training samples: {len(train_set):,}")
 
     loader_kw = {}
+    loader_gen = None
     if seed is not None:
-        loader_kw = dict(generator=torch.Generator().manual_seed(seed),
-                         worker_init_fn=seed_worker)
+        loader_gen = torch.Generator().manual_seed(seed)
+        loader_kw = dict(generator=loader_gen, worker_init_fn=seed_worker)
     loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                         num_workers=args.num_workers, pin_memory=True,
                         drop_last=True, persistent_workers=args.num_workers > 0,
@@ -184,10 +208,12 @@ def run_training(args):
               "config": cfg, "iteration": it}
         if res is not None:
             ck["results"] = res
-        torch.save(ck, path)
+        atomic_save(ck, path)
 
-    if args.resume:
-        ck = torch.load(args.resume, map_location=device, weights_only=False)
+    ck = load_ckpt_safe(args.resume, device) if args.resume else None
+    if args.resume and ck is None:
+        print("  ! resume checkpoint unusable -> training from scratch")
+    if ck is not None:
         model.load_state_dict(ck["model"])
         if "optimizer" in ck:
             optimizer.load_state_dict(ck["optimizer"])
@@ -202,6 +228,12 @@ def run_training(args):
                                   weights_only=False).get("results", {}).get("Avg", -1.0)
         print(f"Resumed from {args.resume} at iteration {start_iter} "
               f"(best Avg so far={best_avg:.2f}%)")
+        if seed is not None:
+            # Advance the RNG streams so a resumed run does not replay the data
+            # order of iteration 0. Resumed runs are statistically equivalent to,
+            # not bit-identical with, an uninterrupted run.
+            set_seed(seed + start_iter)
+            loader_gen.manual_seed(seed + start_iter)
 
     def do_eval(it):
         nonlocal best_avg
