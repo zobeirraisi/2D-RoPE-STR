@@ -49,14 +49,19 @@ for s in 0 1 2; do
 done
 
 # ---------- E3: full-schedule 1D RoPE (same recipe as the Table-2 model) ----------
+# Skipped here if it was moved to the 3090 (marker created when that run starts).
 RUN=full_1drope_s0
-RESUME=()
-[ -f "$CK/$RUN.pt" ] && RESUME=(--resume "$CK/$RUN.pt")
-stamp "E3 $RUN ${RESUME[*]:-}"
-$PY train_2drope_str.py --pe_type 1drope --train_sources MJ ST --iters 300000 \
-    --feature_stride 4 --batch_size 128 --accum_steps 2 --amp --seed 0 \
-    --eval_every 0 --save_dir "$CK" --run_name "$RUN" --data_root "$DATA" "${RESUME[@]}"
-$PY evaluate.py --checkpoint "$CK/$RUN.pt" --data_root "$DATA" --out "$RES/$RUN.json"
+if [ -f logs/E3_ON_3090 ]; then
+  stamp "E3 skipped: running on gpu3090 (~/ROPE_rev1/code)"
+else
+  RESUME=()
+  [ -f "$CK/$RUN.pt" ] && RESUME=(--resume "$CK/$RUN.pt")
+  stamp "E3 $RUN ${RESUME[*]:-}"
+  $PY train_2drope_str.py --pe_type 1drope --train_sources MJ ST --iters 300000 \
+      --feature_stride 4 --batch_size 128 --accum_steps 2 --amp --seed 0 \
+      --eval_every 0 --save_dir "$CK" --run_name "$RUN" --data_root "$DATA" "${RESUME[@]}"
+  $PY evaluate.py --checkpoint "$CK/$RUN.pt" --data_root "$DATA" --out "$RES/$RUN.json"
+fi
 
 # ---------- E2: 2x2 factorial, 3 seeds ----------
 for s in 0 1 2; do
