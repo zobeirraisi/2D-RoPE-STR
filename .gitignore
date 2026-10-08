@@ -23,3 +23,5 @@ data_lmdb_release/
 checkpoints_rev1/
 data_fast/
 logs/rev1_queue.*
+checkpoints
+data_lmdb_release
