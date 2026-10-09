@@ -65,6 +65,12 @@ STUDIES = {
         "1D RoPE in cross-attn": dict(pe_type="2drope", learnable_freq=True, cross_pe="1drope"),
         "2D-RoPE in cross-attn": dict(pe_type="2drope", learnable_freq=True, cross_pe="2drope"),
     },
+    "pe_fs4": {
+        # E7: 1D vs 2D RoPE with 8 feature rows (stride 4) instead of 4 (stride 8).
+        # Same configs as the "pe" study; only the feature-map height changes.
+        "1D RoPE":         dict(pe_type="1drope", feature_stride=4),
+        "2D-RoPE (Ours)":  dict(pe_type="2drope", learnable_freq=True, feature_stride=4),
+    },
     "factorial": {
         # 2x2: dimension split x cross-attention keys. All four use the same
         # pre-norm CrossRoPEDecoderLayer stack (cross_pe="none" is the control),
@@ -98,6 +104,7 @@ def main():
     ap.add_argument("--study", required=True, choices=list(STUDIES.keys()))
     ap.add_argument("--iters", type=int, default=30000)
     ap.add_argument("--batch_size", type=int, default=256)
+    ap.add_argument("--accum_steps", type=int, default=1)
     ap.add_argument("--train_sources", nargs="+", default=["MJ", "ST"])
     ap.add_argument("--limit_train", type=int, default=0)
     ap.add_argument("--feature_stride", type=int, default=8)
@@ -117,6 +124,7 @@ def main():
 
     shared = [
         f"--iters={cli.iters}", f"--batch_size={cli.batch_size}",
+        f"--accum_steps={cli.accum_steps}",
         f"--feature_stride={cli.feature_stride}",
         f"--num_workers={cli.num_workers}", "--eval_every=0",
         f"--save_dir={cli.save_dir}", f"--data_root={cli.data_root}",
