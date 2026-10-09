@@ -2,7 +2,7 @@
 # E7 on the RTX 3090 server: 1D RoPE vs 2D-RoPE with 8 feature rows (stride 4)
 # instead of the 4 rows (stride 8) of E1. Pre-specified hypothesis in
 # manuscript/ijdar/revision1/REVISION_NOTES.md ("E7"). 60k iters, MJ+ST,
-# effective batch 256 (128 x accum 2, as E3), seeds {0,1,2}, final checkpoint.
+# effective batch 256 (128 x accum 2, as E3), seeds {0,1}, final checkpoint.
 # Lives in ~/ROPE_rev1/code on gpu3090; starts after E3 (logs/e3_3090.DONE).
 #
 # Launch (detached):
@@ -40,7 +40,7 @@ CK=checkpoints_rev1
 RES=results/rev1
 mkdir -p "$CK" "$RES"
 
-for s in 0 1 2; do
+for s in 0 1; do
   stamp "E7 pe_fs4 seed $s on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
   $PY run_ablations.py --study pe_fs4 --iters 60000 --feature_stride 4 \
       --batch_size 128 --accum_steps 2 --amp --train_sources MJ ST --seed "$s" \
