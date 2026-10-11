@@ -75,7 +75,7 @@ class GeomDataset(LmdbDataset):
         self.bench, self.kind, self.level, self.tseed = bench, kind, level, tseed
 
     def __getitem__(self, index):
-        key = index + 1
+        key = self.lmdb_key(index)  # valid samples only (eval mode)
         with self.env.begin(write=False) as txn:
             label = txn.get(f"label-{key:09d}".encode()).decode("utf-8", "ignore")
             imgbuf = txn.get(f"image-{key:09d}".encode())
