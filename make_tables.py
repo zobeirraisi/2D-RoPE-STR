@@ -5,6 +5,9 @@ Never type these numbers by hand.
   python make_tables.py factorial   # E2: Table 5 rows + main effects / interaction
   python make_tables.py pe          # E1: multi-seed column of Table 3 + paired differences to 2D-RoPE
   python make_tables.py geom        # E4: rotation / perspective sweep, mean +- sd over training seeds
+                                    #     + seed-paired differences in the drop from clean accuracy
+  python make_tables.py full        # E3: full-schedule rows of Table 1 (one run each, 1 decimal)
+  python make_tables.py xattn       # E2 diagnostic: per-layer cross-attention profile, 2D keys vs none
 
 Outputs go to results/rev1/tables/ (<study>.json with all statistics, <study>_rows.tex).
 
@@ -214,6 +217,41 @@ def geom(res_dir, out_dir, seeds):
             rows[kind].append(f"{label} & " + " & ".join(cells) + r" \\")
     if not stats["rows"]:
         raise SystemExit(f"no geom results in {geo_dir}")
+    # Does 2D-RoPE degrade more slowly? Paired by training seed: d = drop(other) - drop(2D-RoPE),
+    # positive = 2D-RoPE loses less accuracy than the other encoding at that strength.
+    stats["paired_drop_vs_2drope"] = {}
+    ref = stats["rows"].get("2D-RoPE (Ours)")
+    if ref:
+        for other in ["None", "1D Sinusoidal", "1D RoPE", "2D Sinusoidal"]:
+            o = stats["rows"].get(other)
+            if not o or o["seeds"] != ref["seeds"]:
+                continue
+            res = {}
+            for kind, levels in GEOM_LEVELS.items():
+                for lv in levels:
+                    k = f"{kind}:{lv}"
+                    d = ((np.array(o["clean"]["values"]) - np.array(o[k]["values"]))
+                         - (np.array(ref["clean"]["values"]) - np.array(ref[k]["values"])))
+                    res[k] = _paired(d)
+            stats["paired_drop_vs_2drope"][other] = res
+            print(f"  drop({other}) - drop(2D-RoPE): "
+                  + "  ".join(f"{k.split(':')[1]}:{v['mean']:+.2f}[{v['ci95'][0]:+.2f},{v['ci95'][1]:+.2f}]"
+                              for k, v in res.items()))
+    # Factorial: effect of 2D cross keys on the drop, seed-blocked over both splits.
+    cells = {lab: stats["rows"].get(lab) for lab, _ in GEOM_ROWS[7:]}
+    if all(cells.values()):
+        res = {}
+        for kind, levels in GEOM_LEVELS.items():
+            for lv in levels:
+                k = f"{kind}:{lv}"
+                drop = {lab: np.array(e["clean"]["values"]) - np.array(e[k]["values"]) for lab, e in cells.items()}
+                none = (drop["$32{:}32$ + no cross"] + drop["$48{:}16$ + no cross"]) / 2
+                cross = (drop["$32{:}32$ + 2D cross"] + drop["$48{:}16$ + 2D cross"]) / 2
+                res[k] = _paired(none - cross)
+        stats["cross_keys_drop_reduction"] = res
+        print("  drop(no cross) - drop(2D cross): "
+              + "  ".join(f"{k.split(':')[1]}:{v['mean']:+.2f}[{v['ci95'][0]:+.2f},{v['ci95'][1]:+.2f}]"
+                          for k, v in res.items()))
     print(f"geom: {len(stats['rows'])} configs in {geo_dir}")
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "geom.json"), "w") as f:
@@ -226,6 +264,77 @@ def geom(res_dir, out_dir, seeds):
               + "".join(f"  {k.split(':')[1]}:{e[k]['mean']:.2f}" for k in e if ':' in k))
 
 
+def _paired(d):
+    """Mean, sd, 95% CI (t, df=n-1) and two-sided p of seed-paired differences d."""
+    n = len(d)
+    m, sd = float(np.mean(d)), float(np.std(d, ddof=1))
+    se = sd / math.sqrt(n)
+    tc = t_crit(n - 1)
+    p = t_two_sided_p(m / se, n - 1) if se > 0 else float("nan")
+    return {"mean": m, "sd": sd, "ci95": [m - tc * se, m + tc * se], "p": p, "values": [float(x) for x in d]}
+
+
+# ---------------------------------------------------------------- E2 cross-attention diagnostic
+XATTN_METRICS = ["spread", "entropy", "backtrack", "backtrack_peak"]
+
+
+def xattn(res_dir, out_dir, seeds):
+    """Per-layer cross-attention profile; effect of 2D-RoPE keys = mean over both splits of
+    (2D cross - no cross), paired by seed. Groups: regular / irregular, all / correct / wrong."""
+    xdir = os.path.join(res_dir, "xattn")
+    runs = {}
+    for split in ["32-32", "48-16"]:
+        for cross in ["no-cross", "2d-cross"]:
+            runs[(split, cross)] = load_seeds(xdir, f"abl_factorial_{split}-{cross}", seeds)
+    common = sorted(set.intersection(*[set(r) for r in runs.values()]))
+    if not common:
+        raise SystemExit(f"no complete seed in {xdir}")
+    layers = [f"L{i}" for i in range(1, 7)]
+    stats = {"seeds": common, "groups": {}}
+    rows = []
+    for grp in ["regular", "irregular"]:
+        for sub in ["all", "correct", "wrong"]:
+            g = {}
+            for met in XATTN_METRICS:
+                for L in layers:
+                    key = f"{L}_{met}"
+                    val = {c: np.array([runs[c][s]["summary"][grp][sub][key] for s in common]) for c in runs}
+                    none = (val[("32-32", "no-cross")] + val[("48-16", "no-cross")]) / 2
+                    cross = (val[("32-32", "2d-cross")] + val[("48-16", "2d-cross")]) / 2
+                    g[key] = {"none": float(none.mean()), "cross": float(cross.mean()), "effect": _paired(cross - none)}
+            stats["groups"][f"{grp}/{sub}"] = g
+            for met in XATTN_METRICS:
+                cells = [f"{g[f'{L}_{met}']['none']:.3f}/{g[f'{L}_{met}']['cross']:.3f}" for L in layers]
+                rows.append(f"{grp} & {sub} & {met} & " + " & ".join(cells) + r" \\")
+    _write(out_dir, "xattn", stats, rows)
+    print(f"xattn: seeds {common}  (value: none -> 2D keys, effect [95% CI])")
+    for gk in ["regular/all", "irregular/all", "irregular/wrong"]:
+        g = stats["groups"][gk]
+        for met in XATTN_METRICS:
+            print(f"  {gk:16s} {met:15s} " + "  ".join(
+                f"{L}:{g[f'{L}_{met}']['none']:.3f}->{g[f'{L}_{met}']['cross']:.3f}"
+                f"({'*' if g[f'{L}_{met}']['effect']['ci95'][0] > 0 or g[f'{L}_{met}']['effect']['ci95'][1] < 0 else ' '})"
+                for L in layers))
+
+
+FULL_ROWS = [("1D RoPE, same pipeline (ours)", "full_1drope_s0"),
+             ("1D sinusoidal, same pipeline (ours)", "full_1dsin_s0")]
+
+
+def full(res_dir, out_dir, seeds):
+    stats, rows = {}, []
+    for label, stem in FULL_ROWS:
+        f = os.path.join(res_dir, f"{stem}.json")
+        if not os.path.exists(f):
+            print(f"  [missing] {f}")
+            continue
+        r = json.load(open(f))
+        stats[label] = r
+        rows.append(f"{label} & " + " & ".join(f"{r[b]:.1f}" for b in BENCH) + f" & {r['Avg']:.2f} \\\\")
+        print("  " + rows[-1])
+    _write(out_dir, "full", stats, rows)
+
+
 def _write(out_dir, name, stats, rows):
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, f"{name}.json"), "w") as f:
@@ -236,12 +345,12 @@ def _write(out_dir, name, stats, rows):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("study", choices=["factorial", "pe", "geom"])
+    ap.add_argument("study", choices=["factorial", "pe", "geom", "xattn", "full"])
     ap.add_argument("--results", default="results/rev1")
     ap.add_argument("--out_dir", default="results/rev1/tables")
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     args = ap.parse_args()
-    {"factorial": factorial, "pe": pe, "geom": geom}[args.study](args.results, args.out_dir, args.seeds)
+    {"factorial": factorial, "pe": pe, "geom": geom, "xattn": xattn, "full": full}[args.study](args.results, args.out_dir, args.seeds)
 
 
 if __name__ == "__main__":
