@@ -1,6 +1,9 @@
-torch==2.1.2
-torchvision==0.16.2
-lmdb==1.0.1
-Pillow==10.1.0
-tqdm==4.66.1
-numpy==1.24.3
+# Versions used for all results in the revised paper (Python 3.12, CUDA 11.8 wheels).
+# torch >= 2.3 is required (torch.amp.GradScaler("cuda")); numpy >= 2.0 (np.trapezoid in make_tables.py).
+torch==2.7.1
+torchvision==0.22.1
+lmdb==2.2.1
+Pillow==12.2.0
+tqdm==4.68.2
+numpy==2.4.6
+matplotlib==3.11.0
