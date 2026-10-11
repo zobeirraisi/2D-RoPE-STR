@@ -319,7 +319,8 @@ def xattn(res_dir, out_dir, seeds):
                 for L in layers))
 
 
-FULL_ROWS = [("1D RoPE, same pipeline (ours)", "full_1drope_s0"),
+FULL_ROWS = [("2D-RoPE, seed 0, same pipeline (ours)", "full_2drope_s0"),
+             ("1D RoPE, same pipeline (ours)", "full_1drope_s0"),
              ("1D sinusoidal, same pipeline (ours)", "full_1dsin_s0")]
 
 
