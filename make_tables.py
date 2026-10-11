@@ -8,6 +8,8 @@ Never type these numbers by hand.
                                     #     + seed-paired differences in the drop from clean accuracy
   python make_tables.py full        # E3: full-schedule rows of Table 1 (one run each, 1 decimal)
   python make_tables.py xattn       # E2 diagnostic: per-layer cross-attention profile, 2D keys vs none
+  python make_tables.py parseq      # E5: PARSeq learned PE vs 2D-RoPE, mean +- sd over seeds
+                                    #     + seed-paired difference (reads ../third_party/parseq/results)
 
 Outputs go to results/rev1/tables/ (<study>.json with all statistics, <study>_rows.tex).
 
@@ -335,6 +337,45 @@ def full(res_dir, out_dir, seeds):
     _write(out_dir, "full", stats, rows)
 
 
+PARSEQ_ROWS = [("PARSeq (learned PE)", "parseq_learned"), ("PARSeq + 2D-RoPE", "parseq_rope2d")]
+
+
+def parseq(res_dir, out_dir, seeds):
+    """E5: rows per protocol (1015/2077 and 857/1811), mean +- sd over the seeds both arms finished;
+    2D-RoPE - learned, paired by seed (each pair was trained on the same GPU)."""
+    runs = {stem: load_seeds(res_dir, stem, seeds) for _, stem in PARSEQ_ROWS}
+    common = sorted(set.intersection(*[set(r) for r in runs.values()]))
+    if not common:
+        raise SystemExit(f"no seed finished by both arms in {res_dir}")
+    stats, rows = {"seeds": common}, []
+    for proto in ["1015_2077", "857_1811"]:
+        st = {}
+        for label, stem in PARSEQ_ROWS:
+            st[label] = {}
+            cells = []
+            for b in BENCH + ["Avg"]:
+                v = np.array([runs[stem][s][proto][b] for s in common])
+                sd = float(np.std(v, ddof=1)) if len(v) > 1 else None
+                st[label][b] = {"mean": float(v.mean()), "sd": sd, "values": [float(x) for x in v]}
+                cells.append(fmt(v.mean(), sd, 2 if b == "Avg" else 1))
+            rows.append(f"% {proto}\n{label} & " + " & ".join(cells) + f" & {len(common)} \\\\")
+        diff = {}
+        for b in BENCH + ["Avg"]:
+            d = np.array([runs["parseq_rope2d"][s][proto][b] - runs["parseq_learned"][s][proto][b] for s in common])
+            diff[b] = _paired(d) if len(d) > 1 else {"mean": float(d[0]), "values": [float(d[0])]}
+        st["2D-RoPE - learned (paired)"] = diff
+        stats[proto] = st
+    _write(out_dir, "parseq", stats, rows)
+    print(f"parseq: seeds {common}")
+    for proto in ["1015_2077", "857_1811"]:
+        a = stats[proto]
+        d = a["2D-RoPE - learned (paired)"]["Avg"]
+        ci = f"  95% CI [{d['ci95'][0]:+.2f}, {d['ci95'][1]:+.2f}]  p={d['p']:.3f}" if "ci95" in d else ""
+        print(f"  {proto}: learned {a['PARSeq (learned PE)']['Avg']['mean']:.2f}  "
+              f"2D-RoPE {a['PARSeq + 2D-RoPE']['Avg']['mean']:.2f}  diff {d['mean']:+.2f} "
+              f"(per seed {', '.join(f'{x:+.2f}' for x in d['values'])}){ci}")
+
+
 def _write(out_dir, name, stats, rows):
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, f"{name}.json"), "w") as f:
@@ -345,11 +386,15 @@ def _write(out_dir, name, stats, rows):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("study", choices=["factorial", "pe", "geom", "xattn", "full"])
+    ap.add_argument("study", choices=["factorial", "pe", "geom", "xattn", "full", "parseq"])
     ap.add_argument("--results", default="results/rev1")
     ap.add_argument("--out_dir", default="results/rev1/tables")
+    ap.add_argument("--parseq_results", default="../third_party/parseq/results")
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     args = ap.parse_args()
+    if args.study == "parseq":
+        parseq(args.parseq_results, args.out_dir, args.seeds)
+        return
     {"factorial": factorial, "pe": pe, "geom": geom, "xattn": xattn, "full": full}[args.study](args.results, args.out_dir, args.seeds)
 
 
