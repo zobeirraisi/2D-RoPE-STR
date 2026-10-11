@@ -350,6 +350,7 @@ def parseq(res_dir, out_dir, seeds):
     stats, rows = {"seeds": common}, []
     for proto in ["1015_2077", "857_1811"]:
         st = {}
+        rows.append(f"% {proto}")
         for label, stem in PARSEQ_ROWS:
             st[label] = {}
             cells = []
@@ -358,7 +359,7 @@ def parseq(res_dir, out_dir, seeds):
                 sd = float(np.std(v, ddof=1)) if len(v) > 1 else None
                 st[label][b] = {"mean": float(v.mean()), "sd": sd, "values": [float(x) for x in v]}
                 cells.append(fmt(v.mean(), sd, 2 if b == "Avg" else 1))
-            rows.append(f"% {proto}\n{label} & " + " & ".join(cells) + f" & {len(common)} \\\\")
+            rows.append(f"{label} & " + " & ".join(cells) + f" & {len(common)} \\\\")
         diff = {}
         for b in BENCH + ["Avg"]:
             d = np.array([runs["parseq_rope2d"][s][proto][b] - runs["parseq_learned"][s][proto][b] for s in common])
