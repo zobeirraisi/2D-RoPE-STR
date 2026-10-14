@@ -64,14 +64,25 @@ The defaults of `train_2drope_str.py` (`--feature_stride 8`, no `--learnable_fre
 checkpoint was trained before seeds were fixed, so a re-run reproduces it statistically, not
 bit for bit.
 
-Full-schedule 1D baselines of Table 2 (same recipe, fixed frequency bases):
+Full-schedule rows of Table 2: a seeded re-run of the main configuration and the 1D baselines
+(same recipe; the 1D models use fixed frequency bases):
 
 ```bash
+python train_2drope_str.py --pe_type 2drope --learnable_freq --dim_split 0.5 --train_sources MJ ST \
+    --iters 300000 --feature_stride 4 --batch_size 128 --accum_steps 2 --amp --seed 0 --run_name full_2drope_s0
 python train_2drope_str.py --pe_type 1drope --train_sources MJ ST --iters 300000 \
     --feature_stride 4 --batch_size 128 --accum_steps 2 --amp --seed 0 --run_name full_1drope_s0
 python train_2drope_str.py --pe_type 1d_sin --train_sources MJ ST --iters 300000 \
     --feature_stride 4 --batch_size 128 --accum_steps 2 --amp --seed 0 --run_name full_1dsin_s0
 ```
+
+Evaluation output (`evaluate.py`, IC13-1015 / IC15-2077, single runs):
+
+| Model | IIIT5K | SVT | IC13 | IC15 | CUTE80 | SVTP | Avg |
+|---|---|---|---|---|---|---|---|
+| 2D-RoPE, seed 0 (`full_2drope_s0`) | 96.17 | 92.89 | 94.98 | 81.13 | 90.28 | 86.82 | 90.38 |
+| 1D RoPE, seed 0 (`full_1drope_s0`) | 96.20 | 92.58 | 95.07 | 81.22 | 88.19 | 85.12 | 89.73 |
+| 1D sinusoidal, seed 0 (`full_1dsin_s0`) | 96.00 | 91.65 | 94.98 | 80.89 | 90.28 | 85.58 | 89.90 |
 
 ## Reproduce the controlled comparisons (60k iterations, MJ+ST, seeds 0–2)
 
@@ -81,14 +92,14 @@ for s in 0 1 2; do
   python run_ablations.py --study pe --iters 60000 --feature_stride 8 --amp \
       --train_sources MJ ST --seed $s --save_dir checkpoints_rev1 --resume \
       --out results/rev1/abl_pe_s$s.json
-  # Table 5: 2x2 factorial, row/column split x RoPE on cross-attention keys
+  # Table 6: 2x2 factorial, row/column split x RoPE on cross-attention keys
   python run_ablations.py --study factorial --iters 60000 --feature_stride 8 --amp \
       --train_sources MJ ST --seed $s --save_dir checkpoints_rev1 --resume \
       --out results/rev1/abl_factorial_s$s.json
 done
 
-# 1D vs 2D RoPE with an 8x32 grid (stride 4), seeds 0-1
-for s in 0 1; do
+# Table 4: 1D vs 2D RoPE with an 8x32 grid (stride 4), seeds 0-2
+for s in 0 1 2; do
   python run_ablations.py --study pe_fs4 --iters 60000 --feature_stride 4 \
       --batch_size 128 --accum_steps 2 --amp --train_sources MJ ST --seed $s \
       --save_dir checkpoints_rev1 --resume --out results/rev1/abl_pe_fs4_s$s.json
@@ -102,6 +113,9 @@ Robustness to controlled rotation / perspective (Fig. 3) and the cross-attention
 ```bash
 python eval_geometric.py --data_root data_lmdb_release --out_dir results/rev1/geom \
     --checkpoints checkpoints_rev1/abl_pe_*_s[0-9].pt checkpoints_rev1/abl_factorial_*_s[0-9].pt
+python eval_geometric.py --data_root data_lmdb_release --out_dir results/rev1/geom \
+    --checkpoints checkpoints_rev1/full_1drope_s0.pt checkpoints_rev1/full_1dsin_s0.pt \
+                  checkpoints_rev1/full_2drope_s0.pt checkpoints/full_2drope_best.pt
 python analyze_cross_attention.py --data_root data_lmdb_release --out_dir results/rev1/xattn \
     --checkpoints checkpoints_rev1/abl_factorial_*_s[0-9].pt
 ```
@@ -113,18 +127,37 @@ JSONs (baseline rows of Table 2 are copied from the cited papers, with table num
 
 ```bash
 python make_tables.py pe          # Table 3 multi-seed column + paired differences to 2D-RoPE
-python make_tables.py factorial   # Table 5 + main effects / interaction (seed-blocked)
-python make_tables.py geom        # Fig. 3 data + paired differences in accuracy drop
+python make_tables.py pe_fs4      # Table 4 + paired difference and pre-specified decision rule
+python make_tables.py factorial   # Table 6 + main effects / interaction (seed-blocked)
+python make_tables.py geom        # Fig. 3 data + paired differences in accuracy drop + full-schedule rows
 python make_tables.py xattn       # per-layer cross-attention profile
-python make_tables.py full        # full-schedule rows of Table 2
+python make_tables.py full        # full-schedule rows of Table 2 + per-benchmark differences
+python make_tables.py parseq      # Table 7 (reads ../third_party/parseq/results)
 python make_overview_figure.py    # Fig. 1
 python make_geom_figure.py        # Fig. 3
 ```
 
 Outputs go to `results/rev1/tables/`.
 
-The PARSeq transfer experiment uses a modified copy of the official PARSeq code with a 2D-RoPE
-option for its ViT encoder (`model.pos_enc=rope2d`); see `scripts/e5_parseq.sh`.
+The PARSeq transfer experiment (Table 7) uses a modified copy of the official PARSeq code with a
+2D-RoPE option for its ViT encoder (`model.pos_enc=rope2d`), trained on the same MJ+ST LMDBs with
+the official synthetic-data recipe on one GPU (2-step gradient accumulation, learning rate rescaled
+to the 2-GPU step size). The modification is `patches/parseq_rope2d.patch`, which applies to
+upstream PARSeq commit `1902db0`; `scripts/e5_parseq.sh` has the exact training and evaluation
+commands:
+
+```bash
+git clone https://github.com/baudm/parseq.git ../third_party/parseq
+git -C ../third_party/parseq checkout 1902db0 && git -C ../third_party/parseq apply "$PWD/patches/parseq_rope2d.patch"
+bash scripts/e5_parseq.sh pc rope2d:0 learned:0   # seeds 1 and 2 likewise
+```
+
+Mean ± sd over seeds 0–2 (IC13-1015 / IC15-2077):
+
+| Model | IIIT5K | SVT | IC13 | IC15 | CUTE80 | SVTP | Avg |
+|---|---|---|---|---|---|---|---|
+| PARSeq (learned PE) | 96.28 ± 0.11 | 92.84 ± 0.32 | 95.73 ± 0.15 | 82.47 ± 0.25 | 91.20 ± 0.87 | 87.91 ± 0.81 | 91.07 ± 0.25 |
+| PARSeq + 2D-RoPE | 96.71 ± 0.27 | 92.89 ± 0.56 | 95.93 ± 0.50 | 83.26 ± 0.28 | 93.06 ± 0.69 | 89.04 ± 0.09 | 91.81 ± 0.19 |
 
 ## Code structure
 
@@ -140,6 +173,7 @@ option for its ViT encoder (`model.pos_enc=rope2d`); see `scripts/e5_parseq.sh`.
 | `make_qualitative.py`, `make_attention_sbs.py` | Qualitative examples, disagreement counts, attention maps |
 | `dataset.py` | LMDB reader, label converter, transforms |
 | `scripts/` | Power-loss-safe launchers used for the revision experiments |
+| `patches/parseq_rope2d.patch` | 2D-RoPE option for PARSeq (transfer experiment, Table 7) |
 
 ## Reproducibility
 

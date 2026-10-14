@@ -1,0 +1,308 @@
+From 86ea7b83ab70e9a229833046641e7bcd0950f0f2 Mon Sep 17 00:00:00 2001
+From: zobeirraisi <zobeir.raisi@gmail.com>
+Date: Fri, 9 Oct 2026 07:58:59 +0330
+Subject: [PATCH] 2D-RoPE option for the ViT encoder (pos_enc=rope2d), seeding,
+ final.ckpt, swa_base_lr, JSON eval
+
+For the 2D-RoPE-STR IJDAR revision (E5): replace the learned additive position
+embedding with axial 2D-RoPE (equal split, base 10000, learnable per-axis
+scales) in every encoder block; everything else unchanged.
+
+---
+ configs/main.yaml               |  2 +
+ configs/model/parseq.yaml       |  1 +
+ eval_json.py                    | 68 +++++++++++++++++++++++++++++
+ strhub/models/parseq/model.py   |  4 +-
+ strhub/models/parseq/modules.py | 76 +++++++++++++++++++++++++++++++++
+ strhub/models/parseq/system.py  |  2 +
+ train.py                        | 10 ++++-
+ 7 files changed, 161 insertions(+), 2 deletions(-)
+ create mode 100644 eval_json.py
+
+diff --git a/configs/main.yaml b/configs/main.yaml
+index fe890d3..c51ee2e 100644
+--- a/configs/main.yaml
++++ b/configs/main.yaml
+@@ -41,6 +41,8 @@ trainer:
+   devices: 2
+ 
+ ckpt_path: null
++seed: null
++swa_base_lr: null
+ pretrained: null
+ 
+ hydra:
+diff --git a/configs/model/parseq.yaml b/configs/model/parseq.yaml
+index 16c9b09..42b5118 100644
+--- a/configs/model/parseq.yaml
++++ b/configs/model/parseq.yaml
+@@ -19,6 +19,7 @@ perm_num: 6
+ perm_forward: true
+ perm_mirrored: true
+ dropout: 0.1
++pos_enc: learned  # learned (official) | rope2d (2D-RoPE-STR transfer experiment)
+ 
+ # Decoding mode (test)
+ decode_ar: true
+diff --git a/eval_json.py b/eval_json.py
+new file mode 100644
+index 0000000..715cf95
+--- /dev/null
++++ b/eval_json.py
+@@ -0,0 +1,68 @@
++#!/usr/bin/env python3
++"""Evaluate a PARSeq checkpoint with the protocol of test.py (36-char, case-insensitive)
++and write the word accuracies as JSON in the 2D-RoPE-STR results format:
++
++    {"1015_2077": {"IIIT5K": .., "SVT": .., "IC13": .., "IC15": .., "CUTE80": .., "SVTP": .., "Avg": ..},
++     "857_1811":  {...}, "n": {dataset: num_samples}, ...}
++
++Avg is the unweighted mean of the six benchmarks.
++"""
++import argparse
++import json
++import os
++import string
++
++import torch
++from tqdm import tqdm
++
++from strhub.data.module import SceneTextDataModule
++from strhub.models.utils import load_from_checkpoint
++
++NAMES = {'IIIT5k': 'IIIT5K', 'SVT': 'SVT', 'IC13_857': 'IC13', 'IC13_1015': 'IC13',
++         'IC15_1811': 'IC15', 'IC15_2077': 'IC15', 'CUTE80': 'CUTE80', 'SVTP': 'SVTP'}
++ORDER = ['IIIT5K', 'SVT', 'IC13', 'IC15', 'CUTE80', 'SVTP']
++
++
++@torch.inference_mode()
++def main():
++    ap = argparse.ArgumentParser()
++    ap.add_argument('checkpoint')
++    ap.add_argument('--out', required=True)
++    ap.add_argument('--data_root', default='data')
++    ap.add_argument('--batch_size', type=int, default=512)
++    ap.add_argument('--num_workers', type=int, default=4)
++    ap.add_argument('--device', default='cuda')
++    args = ap.parse_args()
++
++    charset_test = string.digits + string.ascii_lowercase
++    model = load_from_checkpoint(args.checkpoint, charset_test=charset_test).eval().to(args.device)
++    hp = model.hparams
++    dm = SceneTextDataModule(args.data_root, '_unused_', hp.img_size, hp.max_label_length, hp.charset_train,
++                             hp.charset_test, args.batch_size, args.num_workers, False)
++    test_set = sorted(set(SceneTextDataModule.TEST_BENCHMARK_SUB + SceneTextDataModule.TEST_BENCHMARK))
++    acc, n = {}, {}
++    for name, dl in dm.test_dataloaders(test_set).items():
++        total = correct = 0
++        for imgs, labels in tqdm(iter(dl), desc=name):
++            res = model.test_step((imgs.to(model.device), labels), -1)['output']
++            total += res.num_samples
++            correct += res.correct
++        acc[name], n[name] = 100.0 * correct / total, total
++
++    out = {'checkpoint': os.path.abspath(args.checkpoint), 'pos_enc': hp.get('pos_enc', 'learned'), 'n': n}
++    for proto, sets in (('1015_2077', SceneTextDataModule.TEST_BENCHMARK),
++                        ('857_1811', SceneTextDataModule.TEST_BENCHMARK_SUB)):
++        r = {NAMES[s]: acc[s] for s in sets}
++        r = {k: r[k] for k in ORDER}
++        r['Avg'] = sum(r.values()) / len(ORDER)
++        out[proto] = r
++        print(proto, '  '.join(f'{k} {v:.2f}' for k, v in r.items()))
++    tmp = args.out + '.tmp'
++    with open(tmp, 'w') as f:
++        json.dump(out, f, indent=2)
++    os.replace(tmp, args.out)
++    print('wrote', args.out)
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/strhub/models/parseq/model.py b/strhub/models/parseq/model.py
+index 8a0e1ca..7d1c93e 100644
+--- a/strhub/models/parseq/model.py
++++ b/strhub/models/parseq/model.py
+@@ -46,6 +46,7 @@ class PARSeq(nn.Module):
+         decode_ar: bool,
+         refine_iters: int,
+         dropout: float,
++        pos_enc: str = 'learned',
+     ) -> None:
+         super().__init__()
+ 
+@@ -54,7 +55,8 @@ class PARSeq(nn.Module):
+         self.refine_iters = refine_iters
+ 
+         self.encoder = Encoder(
+-            img_size, patch_size, embed_dim=embed_dim, depth=enc_depth, num_heads=enc_num_heads, mlp_ratio=enc_mlp_ratio
++            img_size, patch_size, embed_dim=embed_dim, depth=enc_depth, num_heads=enc_num_heads, mlp_ratio=enc_mlp_ratio,
++            pos_enc=pos_enc,
+         )
+         decoder_layer = DecoderLayer(embed_dim, dec_num_heads, embed_dim * dec_mlp_ratio, dropout)
+         self.decoder = Decoder(decoder_layer, num_layers=dec_depth, norm=nn.LayerNorm(embed_dim))
+diff --git a/strhub/models/parseq/modules.py b/strhub/models/parseq/modules.py
+index e3e3f23..5968d94 100644
+--- a/strhub/models/parseq/modules.py
++++ b/strhub/models/parseq/modules.py
+@@ -125,6 +125,60 @@ class Decoder(nn.Module):
+         return query
+ 
+ 
++class RotaryEmbedding2D(nn.Module):
++    """Axial 2D-RoPE as in the 2D-RoPE-STR main model: equal row/column split of the
++    head dimension, base 10000, and learnable per-axis frequency scales (beta)."""
++
++    def __init__(self, head_dim: int, base: float = 10000.0):
++        super().__init__()
++        self.d_h = head_dim // 2
++        self.d_w = head_dim - self.d_h
++        inv = lambda d: 1.0 / (base ** (torch.arange(0, d, 2).float() / d))  # noqa: E731
++        self.register_buffer('inv_freq_h', inv(self.d_h), persistent=False)
++        self.register_buffer('inv_freq_w', inv(self.d_w), persistent=False)
++        self.beta_h = nn.Parameter(torch.ones(1))
++        self.beta_w = nn.Parameter(torch.ones(1))
++
++    def forward(self, H: int, W: int, device):
++        h = torch.arange(H, device=device).float() * self.beta_h.float()
++        w = torch.arange(W, device=device).float() * self.beta_w.float()
++        hf = torch.outer(h, self.inv_freq_h)  # (H, d_h/2)
++        wf = torch.outer(w, self.inv_freq_w)  # (W, d_w/2)
++        return torch.polar(torch.ones_like(hf), hf), torch.polar(torch.ones_like(wf), wf)
++
++
++def apply_2d_rope(x: Tensor, hf: Tensor, wf: Tensor, H: int, W: int, d_h: int) -> Tensor:
++    """x: (B, heads, H*W, head_dim), tokens in row-major order."""
++    B, nh, N, D = x.shape
++    x = x.float().view(B, nh, H, W, D)
++    xh = torch.view_as_complex(x[..., :d_h].reshape(B, nh, H, W, -1, 2))
++    xw = torch.view_as_complex(x[..., d_h:].reshape(B, nh, H, W, -1, 2))
++    xh = torch.view_as_real(xh * hf[None, None, :, None]).flatten(-2)
++    xw = torch.view_as_real(xw * wf[None, None, None, :]).flatten(-2)
++    return torch.cat([xh, xw], dim=-1).view(B, nh, N, D)
++
++
++class RoPEAttention(nn.Module):
++    """timm ViT attention with 2D-RoPE applied to queries and keys (same weights layout)."""
++
++    def __init__(self, attn: nn.Module):
++        super().__init__()
++        self.num_heads, self.head_dim = attn.num_heads, attn.head_dim
++        self.qkv, self.q_norm, self.k_norm = attn.qkv, attn.q_norm, attn.k_norm
++        self.attn_drop, self.proj, self.proj_drop = attn.attn_drop, attn.proj, attn.proj_drop
++
++    def forward(self, x: Tensor, hf: Tensor, wf: Tensor, H: int, W: int, d_h: int) -> Tensor:
++        B, N, C = x.shape
++        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
++        q, k, v = qkv.unbind(0)
++        q, k = self.q_norm(q), self.k_norm(k)
++        q = apply_2d_rope(q, hf, wf, H, W, d_h).type_as(v)
++        k = apply_2d_rope(k, hf, wf, H, W, d_h).type_as(v)
++        x = F.scaled_dot_product_attention(q, k, v, dropout_p=self.attn_drop.p if self.training else 0.0)
++        x = x.transpose(1, 2).reshape(B, N, C)
++        return self.proj_drop(self.proj(x))
++
++
+ class Encoder(VisionTransformer):
+ 
+     def __init__(
+@@ -141,6 +195,7 @@ class Encoder(VisionTransformer):
+         attn_drop_rate=0.0,
+         drop_path_rate=0.0,
+         embed_layer=PatchEmbed,
++        pos_enc='learned',
+     ):
+         super().__init__(
+             img_size,
+@@ -159,6 +214,27 @@ class Encoder(VisionTransformer):
+             global_pool='',  # disable the
+             class_token=False,  # classifier head.
+         )
++        if pos_enc not in ('learned', 'rope2d'):
++            raise ValueError(f'unknown pos_enc: {pos_enc}')
++        self.pos_enc = pos_enc
++        if pos_enc == 'rope2d':
++            # Replace the learned additive position embedding by 2D-RoPE in every encoder block.
++            self.pos_embed = None
++            self.rope = RotaryEmbedding2D(embed_dim // num_heads)
++            for blk in self.blocks:
++                blk.attn = RoPEAttention(blk.attn)
++
++    def forward_features(self, x):
++        if self.pos_enc == 'learned':
++            return super().forward_features(x)
++        x = self.patch_embed(x)  # (B, H*W, C), row-major
++        x = self.norm_pre(self.patch_drop(self.pos_drop(x)))
++        H, W = self.patch_embed.grid_size
++        hf, wf = self.rope(H, W, x.device)
++        for blk in self.blocks:
++            x = x + blk.drop_path1(blk.ls1(blk.attn(blk.norm1(x), hf, wf, H, W, self.rope.d_h)))
++            x = x + blk.drop_path2(blk.ls2(blk.mlp(blk.norm2(x))))
++        return self.norm(x)
+ 
+     def forward(self, x):
+         # Return all tokens
+diff --git a/strhub/models/parseq/system.py b/strhub/models/parseq/system.py
+index be8581e..b5ceb2c 100644
+--- a/strhub/models/parseq/system.py
++++ b/strhub/models/parseq/system.py
+@@ -56,6 +56,7 @@ class PARSeq(CrossEntropySystem):
+         decode_ar: bool,
+         refine_iters: int,
+         dropout: float,
++        pos_enc: str = 'learned',
+         **kwargs: Any,
+     ) -> None:
+         super().__init__(charset_train, charset_test, batch_size, lr, warmup_pct, weight_decay)
+@@ -76,6 +77,7 @@ class PARSeq(CrossEntropySystem):
+             decode_ar,
+             refine_iters,
+             dropout,
++            pos_enc,
+         )
+ 
+         # Perm/attn mask stuff
+diff --git a/train.py b/train.py
+index e4c3aff..9333bfa 100755
+--- a/train.py
++++ b/train.py
+@@ -22,6 +22,7 @@ from omegaconf import DictConfig, open_dict
+ 
+ import torch
+ 
++import pytorch_lightning as pl
+ from pytorch_lightning import Trainer
+ from pytorch_lightning.callbacks import ModelCheckpoint, StochasticWeightAveraging
+ from pytorch_lightning.loggers import TensorBoardLogger
+@@ -74,6 +75,9 @@ def main(config: DictConfig):
+     if config.model.get('perm_mirrored', False):
+         assert config.model.perm_num % 2 == 0, 'perm_num should be even if perm_mirrored = True'
+ 
++    if config.get('seed') is not None:
++        pl.seed_everything(config.seed, workers=True)
++
+     model: BaseSystem = hydra.utils.instantiate(config.model)
+     # If specified, use pretrained weights to initialize the model
+     if config.pretrained is not None:
+@@ -91,7 +95,9 @@ def main(config: DictConfig):
+         filename='{epoch}-{step}-{val_accuracy:.4f}-{val_NED:.4f}',
+     )
+     swa_epoch_start = 0.75
+-    swa_lr = config.model.lr * get_swa_lr_factor(config.model.warmup_pct, swa_epoch_start)
++    # swa_base_lr lets a 1-GPU run keep the SWA lr of the official 2-GPU recipe when model.lr is rescaled.
++    swa_base_lr = config.get('swa_base_lr') or config.model.lr
++    swa_lr = swa_base_lr * get_swa_lr_factor(config.model.warmup_pct, swa_epoch_start)
+     swa = StochasticWeightAveraging(swa_lr, swa_epoch_start)
+     cwd = (
+         HydraConfig.get().runtime.output_dir
+@@ -106,6 +112,8 @@ def main(config: DictConfig):
+         callbacks=[checkpoint, swa],
+     )
+     trainer.fit(model, datamodule=datamodule, ckpt_path=config.ckpt_path)
++    # Weights at the end of training (after the SWA callback has swapped in the averaged weights).
++    trainer.save_checkpoint(str(Path(cwd, 'checkpoints', 'final.ckpt')))
+ 
+ 
+ if __name__ == '__main__':
+-- 
+2.43.0
+
