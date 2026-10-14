@@ -8,6 +8,7 @@ Never type these numbers by hand.
                                     #     + seed-paired differences in the drop from clean accuracy
   python make_tables.py full        # E3: full-schedule rows of Table 1 (one run each, 1 decimal)
   python make_tables.py xattn       # E2 diagnostic: per-layer cross-attention profile, 2D keys vs none
+  python make_tables.py pe_fs4      # E7: 1D vs 2D RoPE at stride 4, paired by seed (Amendment 3 rule)
   python make_tables.py parseq      # E5: PARSeq learned PE vs 2D-RoPE, mean +- sd over seeds
                                     #     + seed-paired difference (reads ../third_party/parseq/results)
 
@@ -177,6 +178,34 @@ def pe(res_dir, out_dir, seeds):
             extra = f"   vs 2D-RoPE {dd['mean']:+.2f} [{dd['ci95'][0]:+.2f}, {dd['ci95'][1]:+.2f}] p={dd['p']:.3f}" if dd else ""
             sd = f"{e['Avg']['sd']:.2f}" if e['Avg']['sd'] is not None else "-"
             print(f"  {label:16s} n={len(e['seeds'])}  Avg {e['Avg']['mean']:.2f} +- {sd}{extra}")
+
+
+# ---------------------------------------------------------------- E7 1D vs 2D RoPE at stride 4
+def pe_fs4(res_dir, out_dir, seeds):
+    """E7 (Amendment 3 rule, fixed before any E7 result): 2D-RoPE - 1D RoPE at feature stride 4,
+    paired by seed. 'Helps' only if the mean paired Avg difference >= 0.5 AND 2D > 1D in every seed."""
+    runs = load_seeds(res_dir, "abl_pe_fs4", seeds)
+    common = sorted(s for s in runs if {"1D RoPE", "2D-RoPE (Ours)"} <= set(runs[s]))
+    if len(common) < 2:
+        raise SystemExit(f"need >= 2 seeds with both arms in {res_dir}, found {common}")
+    stats, rows = {"seeds": common, "rows": {}}, []
+    for label in ["1D RoPE", "2D-RoPE (Ours)"]:
+        v = {o: np.array([outcomes(runs[s][label])[o] for s in common]) for o in OUTCOMES}
+        stats["rows"][label] = {o: {"mean": float(x.mean()), "sd": float(x.std(ddof=1)), "values": x.tolist()}
+                                for o, x in v.items()}
+        rows.append(f"{label} & " + " & ".join(fmt(v[b].mean(), v[b].std(ddof=1), 1) for b in BENCH)
+                    + " & " + fmt(v["Avg"].mean(), v["Avg"].std(ddof=1), 2) + f" & {len(common)} \\\\")
+    d = np.array([outcomes(runs[s]["2D-RoPE (Ours)"])["Avg"] - outcomes(runs[s]["1D RoPE"])["Avg"] for s in common])
+    diff = _paired(d)
+    helps = bool(diff["mean"] >= 0.5 and (d > 0).all())
+    stats["diff_2d_minus_1d_avg"] = diff
+    stats["decision"] = "2D helps at stride 4" if helps else "no difference at stride 4"
+    _write(out_dir, "pe_fs4", stats, rows)
+    print(f"pe_fs4: seeds {common}")
+    print(f"  1D RoPE {stats['rows']['1D RoPE']['Avg']['mean']:.2f}  2D-RoPE {stats['rows']['2D-RoPE (Ours)']['Avg']['mean']:.2f}"
+          f"  diff {diff['mean']:+.2f} (per seed {', '.join(f'{x:+.2f}' for x in d)})"
+          f"  95% CI [{diff['ci95'][0]:+.2f}, {diff['ci95'][1]:+.2f}]  p={diff['p']:.3f}")
+    print(f"  decision: {stats['decision']}")
 
 
 # ---------------------------------------------------------------- E4 geometric robustness
@@ -388,7 +417,7 @@ def _write(out_dir, name, stats, rows):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("study", choices=["factorial", "pe", "geom", "xattn", "full", "parseq"])
+    ap.add_argument("study", choices=["factorial", "pe", "pe_fs4", "geom", "xattn", "full", "parseq"])
     ap.add_argument("--results", default="results/rev1")
     ap.add_argument("--out_dir", default="results/rev1/tables")
     ap.add_argument("--parseq_results", default="../third_party/parseq/results")
@@ -397,7 +426,7 @@ def main():
     if args.study == "parseq":
         parseq(args.parseq_results, args.out_dir, args.seeds)
         return
-    {"factorial": factorial, "pe": pe, "geom": geom, "xattn": xattn, "full": full}[args.study](args.results, args.out_dir, args.seeds)
+    {"factorial": factorial, "pe": pe, "pe_fs4": pe_fs4, "geom": geom, "xattn": xattn, "full": full}[args.study](args.results, args.out_dir, args.seeds)
 
 
 if __name__ == "__main__":
