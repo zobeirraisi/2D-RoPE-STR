@@ -40,7 +40,7 @@ def main():
 
     plt.rcParams.update({"font.size": 8, "axes.edgecolor": MUTED, "axes.labelcolor": INK,
                          "xtick.color": MUTED, "ytick.color": MUTED, "axes.linewidth": 0.6})
-    fig, axes = plt.subplots(2, 2, figsize=(7.0, 4.6), sharex="col",
+    fig, axes = plt.subplots(2, 2, figsize=(5.2, 4.2), sharex="col",  # printed size: fonts print at nominal size
                              gridspec_kw={"height_ratios": [1.6, 1]})
     for c, kind in enumerate(["rotation", "perspective"]):
         lv = LEVELS[kind]
@@ -56,7 +56,8 @@ def main():
                 mf = [f["clean"]] + [f[f"{kind}:{x}"]["acc"] for x in lv[1:]]
                 ax.plot(lv, mf, color=col, lw=1.0, ls="--", marker=mk, ms=4, mfc="white")
         ax.axvline(TRAIN_MAX[kind], color=MUTED, lw=0.8, ls=":")
-        ax.set_ylabel("Avg. word accuracy (%)")
+        if c == 0:
+            ax.set_ylabel("Avg. word accuracy (%)")
         ax.grid(axis="y", color=GRID, lw=0.6)
         ax.set_title(kind.capitalize(), color=INK, fontsize=9)
 
@@ -73,7 +74,8 @@ def main():
                         elinewidth=1.0, capsize=2)
         ax.axvline(TRAIN_MAX[kind], color=MUTED, lw=0.8, ls=":")
         ax.set_xlabel(XLABEL[kind])
-        ax.set_ylabel("extra drop vs.\n2D-RoPE (points)")
+        if c == 0:
+            ax.set_ylabel("extra drop vs.\n2D-RoPE (points)")
         ax.grid(axis="y", color=GRID, lw=0.6)
         ax.set_xticks(lv)
     for ax in axes.flat:
@@ -81,7 +83,7 @@ def main():
     h, lab = axes[0, 0].get_legend_handles_labels()
     h += [plt.Line2D([], [], color=MUTED, lw=1.5), plt.Line2D([], [], color=MUTED, lw=1.0, ls="--", marker="o", mfc="white", ms=4)]
     lab += ["reduced schedule, 3 seeds", "full schedule, 1 run"]
-    axes[0, 0].legend(h, lab, frameon=False, loc="lower left", fontsize=7)
+    axes[0, 0].legend(h, lab, frameon=False, loc="lower left", fontsize=7, handlelength=1.8, borderaxespad=0.2)
     fig.tight_layout()
     fig.savefig(args.out, bbox_inches="tight")
     fig.savefig(args.out.replace(".pdf", ".png"), dpi=200, bbox_inches="tight")

@@ -89,7 +89,7 @@ def main():
     examples = pick_examples(conv, args.benchmarks, args.per_set, args.min_len)
     tf = build_transform(augment=False)
     nr, nc = len(examples), len(models) + 1
-    fig, axes = plt.subplots(nr, nc, figsize=(1.75 * nc, 0.78 * nr))
+    fig, axes = plt.subplots(nr, nc, figsize=(1.27 * nc, 0.66 * nr))  # printed size (text width 5.17 in)
     axes = np.array(axes).reshape(nr, nc)
 
     for r, (raw, _, gt, bench) in enumerate(examples):
@@ -99,21 +99,21 @@ def main():
         vrange = (min(u.min() for u in ups), max(u.max() for u in ups))  # shared per row
 
         mq._overlay(axes[r, 0], raw, None)
-        axes[r, 0].set_xlabel(f"GT: {normalize(gt)}", fontsize=6.5,
+        axes[r, 0].set_xlabel(f"GT: {normalize(gt)}", fontsize=7,
                               family="monospace", labelpad=1)
-        axes[r, 0].set_ylabel(bench.split("_")[0], fontsize=6.5, rotation=0,
+        axes[r, 0].set_ylabel(bench.split("_")[0], fontsize=7, rotation=0,
                               ha="right", va="center")
         for c, ((label, m), s) in enumerate(zip(models, sals), start=1):
             ax = axes[r, c]
             mq._overlay(ax, raw, s, vrange)
             pred = normalize(mq.predict(m, conv, x))
             ok = pred == normalize(gt)
-            ax.set_xlabel(pred or "(empty)", fontsize=6.5, family="monospace",
-                          color="green" if ok else "red", labelpad=1)
+            ax.set_xlabel(pred or "(empty)", fontsize=7, family="monospace",
+                          color="#1a7f37" if ok else "#c62828", labelpad=1)
             if r == 0:
-                ax.set_title(label, fontsize=7.5)
+                ax.set_title(label, fontsize=8)
         if r == 0:
-            axes[r, 0].set_title("input", fontsize=7.5)
+            axes[r, 0].set_title("input", fontsize=8)
         print(f"  row {r}: {bench} GT={gt!r}")
 
     fig.tight_layout(h_pad=0.25, w_pad=0.3)
