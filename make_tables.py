@@ -6,6 +6,7 @@ Never type these numbers by hand.
   python make_tables.py pe          # E1: multi-seed column of Table 3 + paired differences to 2D-RoPE
   python make_tables.py geom        # E4: rotation / perspective sweep, mean +- sd over training seeds
                                     #     + seed-paired differences in the drop from clean accuracy
+                                    #     + full-schedule checkpoints (Amendment 4, n = 1, descriptive)
   python make_tables.py full        # E3: full-schedule rows of Table 1 (one run each, 1 decimal)
   python make_tables.py xattn       # E2 diagnostic: per-layer cross-attention profile, 2D keys vs none
   python make_tables.py pe_fs4      # E7: 1D vs 2D RoPE at stride 4, paired by seed (Amendment 3 rule)
@@ -284,6 +285,7 @@ def geom(res_dir, out_dir, seeds):
               + "  ".join(f"{k.split(':')[1]}:{v['mean']:+.2f}[{v['ci95'][0]:+.2f},{v['ci95'][1]:+.2f}]"
                           for k, v in res.items()))
     print(f"geom: {len(stats['rows'])} configs in {geo_dir}")
+    stats["full_schedule"] = _geom_full(geo_dir, stats)
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "geom.json"), "w") as f:
         json.dump(stats, f, indent=1)
@@ -293,6 +295,63 @@ def geom(res_dir, out_dir, seeds):
     for label, e in stats["rows"].items():
         print(f"  {label:22s} n={len(e['seeds'])} clean {e['clean']['mean']:.2f}"
               + "".join(f"  {k.split(':')[1]}:{e[k]['mean']:.2f}" for k in e if ':' in k))
+
+
+# Amendment 4 (fixed before the E3b/E3c results): full-schedule checkpoints, one run per arm, so the
+# comparison is descriptive. A difference in the drop between two arms is called a difference only if
+# it exceeds the E1 seed spread at that level: the largest range (max - min over seeds) of the drop
+# among the seven E1 encodings. The June model is a descriptive extra row, outside the comparison.
+GEOM_FULL_ROWS = [("2D-RoPE, seed 0", "full_2drope_s0"), ("1D RoPE, seed 0", "full_1drope_s0"),
+                  ("1D sinusoidal, seed 0", "full_1dsin_s0"), ("2D-RoPE, released (unseeded)", "full_2drope_best")]
+
+
+def _geom_full(geo_dir, stats):
+    out = {"rows": {}, "e1_drop_range": {}, "drop_minus_2drope": {}}
+    for label, stem in GEOM_FULL_ROWS:
+        p = os.path.join(geo_dir, f"{stem}.json")
+        if not os.path.exists(p):
+            print(f"  [missing] {p}")
+            continue
+        r = json.load(open(p))
+        clean = outcomes(r["results"]["rotation"]["0"]["-"])["Avg"]
+        e = {"clean": clean, "iteration": r["iteration"], "config": r["config"]}
+        for kind, levels in GEOM_LEVELS.items():
+            for lv in levels:
+                v = float(np.mean([outcomes(r["results"][kind][str(lv)][str(t)])["Avg"] for t in r["tseeds"]]))
+                e[f"{kind}:{lv}"] = {"acc": v, "drop": clean - v}
+        out["rows"][label] = e
+    e1 = [stats["rows"][k] for k in PE_ROWS if k in stats["rows"]]
+    for kind, levels in GEOM_LEVELS.items():
+        for lv in levels:
+            k = f"{kind}:{lv}"
+            out["e1_drop_range"][k] = max(float(np.ptp(np.array(x["clean"]["values"]) - np.array(x[k]["values"])))
+                                          for x in e1)
+    # "E1 seed spread" is not defined further in Amendment 4; both readings are reported:
+    # e1_range = largest range among all seven E1 encodings, e1_range_pair = larger range of the two
+    # E1 encodings being compared (narrower, so more differences can exceed it).
+    def e1_range(enc, k):
+        x = stats["rows"][enc]
+        return float(np.ptp(np.array(x["clean"]["values"]) - np.array(x[k]["values"])))
+
+    ref = out["rows"].get("2D-RoPE, seed 0")
+    for label, enc in [("1D RoPE, seed 0", "1D RoPE"), ("1D sinusoidal, seed 0", "1D Sinusoidal")]:
+        o = out["rows"].get(label)
+        if not (ref and o):
+            continue
+        res = {}
+        for k, rng in out["e1_drop_range"].items():
+            d = o[k]["drop"] - ref[k]["drop"]  # positive = 2D-RoPE degrades less
+            pair = max(e1_range(enc, k), e1_range("2D-RoPE (Ours)", k))
+            res[k] = {"diff": d, "e1_range": rng, "exceeds": bool(abs(d) > rng),
+                      "e1_range_pair": pair, "exceeds_pair": bool(abs(d) > pair)}
+        out["drop_minus_2drope"][label] = res
+        print(f"  full: drop({label}) - drop(2D-RoPE s0)  [diff (E1 max range / pair range), ! = exceeds]: " + "  ".join(
+            f"{k.split(':')[1]}:{v['diff']:+.2f}({v['e1_range']:.2f}{'!' if v['exceeds'] else ''}"
+            f"/{v['e1_range_pair']:.2f}{'!' if v['exceeds_pair'] else ''})" for k, v in res.items()))
+    for label, e in out["rows"].items():
+        print(f"  full {label:30s} clean {e['clean']:.2f}"
+              + "".join(f"  {k.split(':')[1]}:{e[k]['acc']:.2f}" for k in e if ':' in k))
+    return out
 
 
 def _paired(d):
@@ -364,6 +423,25 @@ def full(res_dir, out_dir, seeds):
         stats[label] = r
         rows.append(f"{label} & " + " & ".join(f"{r[b]:.1f}" for b in BENCH) + f" & {r['Avg']:.2f} \\\\")
         print("  " + rows[-1])
+    # Differences of the seeded 2D-RoPE run (and of the released June model) to each 1D run, in points
+    # and in images (accuracy x n / 100), for the text next to Table 1. Single runs: descriptive only.
+    june_p = os.path.join(os.path.dirname(res_dir.rstrip("/")), "full_2drope_allsplits.json")
+    refs = {k: stats[k] for k in [FULL_ROWS[0][0]] if k in stats}
+    if os.path.exists(june_p):
+        j = json.load(open(june_p))
+        refs["released 2D-RoPE (June)"] = {**{b: j[b] for b in ["IIIT5K", "SVT", "CUTE80", "SVTP"]},
+                                           "IC13": j["IC13_1015"], "IC15": j["IC15_2077"], "Avg": j["Avg_1015_2077"]}
+    stats["differences"] = {}
+    for rname, ref in refs.items():
+        for label, _ in FULL_ROWS[1:]:
+            if label not in stats:
+                continue
+            o = stats[label]
+            d = {b: {"points": ref[b] - o[b], "images": round((ref[b] - o[b]) * N_IMG[b] / 100)} for b in BENCH}
+            d["Avg"] = {"points": ref["Avg"] - o["Avg"]}
+            stats["differences"][f"{rname} - {label}"] = d
+            print(f"  {rname} - {label}: Avg {d['Avg']['points']:+.2f}  "
+                  + "  ".join(f"{b} {d[b]['points']:+.2f} ({d[b]['images']:+d})" for b in BENCH))
     _write(out_dir, "full", stats, rows)
 
 
