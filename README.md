@@ -34,6 +34,33 @@ pip install -r requirements.txt
 
 Tested with Python 3.12, PyTorch 2.7.1 (CUDA 11.8), on an RTX 4090 and an RTX 3090.
 
+## Checkpoints
+
+The four full-schedule models of Table 2 are attached to the GitHub release
+[`v1.0-ijdar-rev1`](https://github.com/zobeirraisi/2D-RoPE-STR/releases/tag/v1.0-ijdar-rev1)
+(weights only, fp32, about 265 MB each; optimizer state removed, weights unchanged):
+
+| File | Model | Avg |
+|---|---|---|
+| `full_2drope_best.pt` | 2D-RoPE, the model of Table 2 (unseeded) | 90.40 |
+| `full_2drope_s0.pt` | 2D-RoPE, seed 0 | 90.38 |
+| `full_1drope_s0.pt` | 1D RoPE, seed 0 | 89.73 |
+| `full_1dsin_s0.pt` | 1D sinusoidal, seed 0 | 89.90 |
+
+```bash
+BASE=https://github.com/zobeirraisi/2D-RoPE-STR/releases/download/v1.0-ijdar-rev1
+mkdir -p release && cd release
+for f in full_2drope_best.pt full_2drope_s0.pt full_1drope_s0.pt full_1dsin_s0.pt SHA256SUMS; do
+  wget $BASE/$f
+done
+sha256sum -c SHA256SUMS && cd ..
+mkdir -p checkpoints checkpoints_rev1   # paths used by the commands below
+mv release/full_2drope_best.pt checkpoints/ && mv release/full_*_s0.pt checkpoints_rev1/
+```
+
+Each file holds `model` (state dict), `config` (the training arguments, read by `evaluate.py`),
+`iteration`, and `results` (the evaluation output below).
+
 ## Data
 
 DTRB LMDB release, organized as
