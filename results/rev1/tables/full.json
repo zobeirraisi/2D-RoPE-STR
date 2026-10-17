@@ -1,0 +1,147 @@
+{
+ "2D-RoPE, seed 0, same pipeline (ours)": {
+  "IIIT5K": 96.16666666666667,
+  "SVT": 92.8902627511592,
+  "IC13": 94.97536945812809,
+  "IC15": 81.12662493981705,
+  "CUTE80": 90.27777777777777,
+  "SVTP": 86.82170542635659,
+  "Avg": 90.37640116998422
+ },
+ "1D RoPE, same pipeline (ours)": {
+  "IIIT5K": 96.2,
+  "SVT": 92.58114374034002,
+  "IC13": 95.07389162561576,
+  "IC15": 81.22291766971594,
+  "CUTE80": 88.19444444444444,
+  "SVTP": 85.11627906976744,
+  "Avg": 89.73144609164727
+ },
+ "1D sinusoidal, same pipeline (ours)": {
+  "IIIT5K": 96.0,
+  "SVT": 91.65378670788253,
+  "IC13": 94.97536945812809,
+  "IC15": 80.8858931150698,
+  "CUTE80": 90.27777777777777,
+  "SVTP": 85.5813953488372,
+  "Avg": 89.89570373461589
+ },
+ "differences": {
+  "2D-RoPE, seed 0, same pipeline (ours) - 1D RoPE, same pipeline (ours)": {
+   "IIIT5K": {
+    "points": -0.03333333333333144,
+    "images": -1
+   },
+   "SVT": {
+    "points": 0.3091190108191739,
+    "images": 2
+   },
+   "IC13": {
+    "points": -0.09852216748767262,
+    "images": -1
+   },
+   "IC15": {
+    "points": -0.0962927298988916,
+    "images": -2
+   },
+   "CUTE80": {
+    "points": 2.0833333333333286,
+    "images": 6
+   },
+   "SVTP": {
+    "points": 1.7054263565891432,
+    "images": 11
+   },
+   "Avg": {
+    "points": 0.6449550783369489
+   }
+  },
+  "2D-RoPE, seed 0, same pipeline (ours) - 1D sinusoidal, same pipeline (ours)": {
+   "IIIT5K": {
+    "points": 0.1666666666666714,
+    "images": 5
+   },
+   "SVT": {
+    "points": 1.2364760432766673,
+    "images": 8
+   },
+   "IC13": {
+    "points": 0.0,
+    "images": 0
+   },
+   "IC15": {
+    "points": 0.2407318247472432,
+    "images": 5
+   },
+   "CUTE80": {
+    "points": 0.0,
+    "images": 0
+   },
+   "SVTP": {
+    "points": 1.240310077519382,
+    "images": 8
+   },
+   "Avg": {
+    "points": 0.4806974353683273
+   }
+  },
+  "released 2D-RoPE (June) - 1D RoPE, same pipeline (ours)": {
+   "IIIT5K": {
+    "points": -0.03333333333333144,
+    "images": -1
+   },
+   "SVT": {
+    "points": -0.15455950540957986,
+    "images": -1
+   },
+   "IC13": {
+    "points": 0.09852216748768683,
+    "images": 1
+   },
+   "IC15": {
+    "points": -0.0481463649494458,
+    "images": -1
+   },
+   "CUTE80": {
+    "points": 2.7777777777777857,
+    "images": 8
+   },
+   "SVTP": {
+    "points": 1.3953488372092977,
+    "images": 9
+   },
+   "Avg": {
+    "points": 0.6726015964637355
+   }
+  },
+  "released 2D-RoPE (June) - 1D sinusoidal, same pipeline (ours)": {
+   "IIIT5K": {
+    "points": 0.1666666666666714,
+    "images": 5
+   },
+   "SVT": {
+    "points": 0.7727975270479135,
+    "images": 5
+   },
+   "IC13": {
+    "points": 0.19704433497535945,
+    "images": 2
+   },
+   "IC15": {
+    "points": 0.288878189696689,
+    "images": 6
+   },
+   "CUTE80": {
+    "points": 0.6944444444444571,
+    "images": 2
+   },
+   "SVTP": {
+    "points": 0.9302325581395365,
+    "images": 6
+   },
+   "Avg": {
+    "points": 0.508343953495114
+   }
+  }
+ }
+}

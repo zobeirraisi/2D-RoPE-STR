@@ -125,7 +125,7 @@ for s in 0 1 2; do
       --out results/rev1/abl_factorial_s$s.json
 done
 
-# Table 4: 1D vs 2D RoPE with an 8x32 grid (stride 4), seeds 0-2
+# Table 5: 1D vs 2D RoPE with an 8x32 grid (stride 4), seeds 0-2
 for s in 0 1 2; do
   python run_ablations.py --study pe_fs4 --iters 60000 --feature_stride 4 \
       --batch_size 128 --accum_steps 2 --amp --train_sources MJ ST --seed $s \
@@ -134,6 +134,19 @@ done
 ```
 
 Always pass `--train_sources MJ ST` and `--seed`.
+
+Single-run ablations (Table 3, single-run column; Table 4 (a)–(d)). These runs predate `--seed`,
+so a re-run reproduces them statistically, not exactly; Table 4 (e) collects the runs that share a
+configuration. Same schedule (60k iterations, stride 8, batch 256, AMP):
+
+```bash
+for study in pe freq dim layers cross; do
+  python run_ablations.py --study $study --iters 60000 --feature_stride 8 --amp \
+      --train_sources MJ ST --out results/abl_$study.json
+done
+```
+
+The `cross` study (Table 4 (d)) uses the pre-norm decoder that supports rotated keys in all three rows.
 
 Robustness to controlled rotation / perspective (Fig. 3) and the cross-attention diagnostic:
 
@@ -150,19 +163,35 @@ python analyze_cross_attention.py --data_root data_lmdb_release --out_dir result
 ## Tables and figures
 
 The multi-seed tables, the full-schedule rows, and Figs. 1 and 3 are generated from the result
-JSONs (baseline rows of Table 2 are copied from the cited papers, with table numbers):
+JSONs (baseline rows of Table 2 are copied from the cited papers, with table numbers). The JSONs are
+in this repository: `results/` (single runs), `results/rev1/` (multi-seed and full-schedule runs),
+`results/rev1/geom/` (the full geometric sweep, including the encodings and factorial models not
+drawn in Fig. 3), `results/rev1/xattn/` (per-layer cross-attention values), and `results/rev1/parseq/`
+(PARSeq runs):
 
 ```bash
 python make_tables.py pe          # Table 3 multi-seed column + paired differences to 2D-RoPE
-python make_tables.py pe_fs4      # Table 4 + paired difference and pre-specified decision rule
+python make_tables.py pe_fs4      # Table 5 + paired difference and pre-specified decision rule
 python make_tables.py factorial   # Table 6 + main effects / interaction (seed-blocked)
 python make_tables.py geom        # Fig. 3 data + paired differences in accuracy drop + full-schedule rows
 python make_tables.py xattn       # per-layer cross-attention profile
 python make_tables.py full        # full-schedule rows of Table 2 + per-benchmark differences
-python make_tables.py parseq      # Table 7 (reads ../third_party/parseq/results)
+python make_tables.py parseq      # Table 7 (reads results/rev1/parseq)
 python make_overview_figure.py    # Fig. 1
 python make_geom_figure.py        # Fig. 3
 ```
+
+Disagreement analysis (Table 8) and the attention maps (Fig. 5):
+
+```bash
+python make_qualitative.py        # Table 8 -> results/netwins.json, and the crops of Fig. 4
+                                  # (single-run 1D-sinusoidal / 2D-RoPE pair of Table 3)
+python make_attention_sbs.py --out fig_attention_sbs.pdf --models \
+    "1D sinusoidal=checkpoints_rev1/full_1dsin_s0.pt" "1D RoPE=checkpoints_rev1/full_1drope_s0.pt" \
+    "2D-RoPE=checkpoints_rev1/full_2drope_s0.pt"   # Fig. 5 (seeded full-schedule models, 8x32 grid)
+```
+
+Fig. 4 was laid out in draw.io from the crops written by `make_qualitative.py`.
 
 Outputs go to `results/rev1/tables/`.
 

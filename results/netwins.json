@@ -1,0 +1,44 @@
+{
+  "IIIT5K": {
+    "n": 3000,
+    "2drope_only": 38,
+    "1dsin_only": 41,
+    "net": -3
+  },
+  "SVT": {
+    "n": 647,
+    "2drope_only": 18,
+    "1dsin_only": 11,
+    "net": 7
+  },
+  "IC13": {
+    "n": 1015,
+    "2drope_only": 11,
+    "1dsin_only": 15,
+    "net": -4
+  },
+  "IC15": {
+    "n": 2077,
+    "2drope_only": 86,
+    "1dsin_only": 60,
+    "net": 26
+  },
+  "CUTE80": {
+    "n": 288,
+    "2drope_only": 10,
+    "1dsin_only": 11,
+    "net": -1
+  },
+  "SVTP": {
+    "n": 645,
+    "2drope_only": 24,
+    "1dsin_only": 12,
+    "net": 12
+  },
+  "Total": {
+    "n": 7672,
+    "2drope_only": 187,
+    "1dsin_only": 150,
+    "net": 37
+  }
+}

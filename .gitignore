@@ -11,7 +11,8 @@ wheels/
 
 # Large data and checkpoints
 checkpoints/*.pt
-results/
+# invalid MJ-only run, not used in the paper
+results/abl_dim.MJonly-invalid.json
 logs/
 data_lmdb_release/
 

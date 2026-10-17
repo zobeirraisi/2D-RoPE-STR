@@ -11,7 +11,7 @@ Never type these numbers by hand.
   python make_tables.py xattn       # E2 diagnostic: per-layer cross-attention profile, 2D keys vs none
   python make_tables.py pe_fs4      # E7: 1D vs 2D RoPE at stride 4, paired by seed (Amendment 3 rule)
   python make_tables.py parseq      # E5: PARSeq learned PE vs 2D-RoPE, mean +- sd over seeds
-                                    #     + seed-paired difference (reads ../third_party/parseq/results)
+                                    #     + seed-paired difference (reads results/rev1/parseq)
 
 Outputs go to results/rev1/tables/ (<study>.json with all statistics, <study>_rows.tex).
 
@@ -498,7 +498,7 @@ def main():
     ap.add_argument("study", choices=["factorial", "pe", "pe_fs4", "geom", "xattn", "full", "parseq"])
     ap.add_argument("--results", default="results/rev1")
     ap.add_argument("--out_dir", default="results/rev1/tables")
-    ap.add_argument("--parseq_results", default="../third_party/parseq/results")
+    ap.add_argument("--parseq_results", default="results/rev1/parseq")  # copies of third_party/parseq/results
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     args = ap.parse_args()
     if args.study == "parseq":
