@@ -10,6 +10,7 @@ Never type these numbers by hand.
   python make_tables.py full        # E3: full-schedule rows of Table 1 (one run each, 1 decimal)
   python make_tables.py xattn       # E2 diagnostic: per-layer cross-attention profile, 2D keys vs none
   python make_tables.py pe_fs4      # E7: 1D vs 2D RoPE at stride 4, paired by seed (Amendment 3 rule)
+  python make_tables.py pe_fixfreq  # E8: fixed-frequency 2D-RoPE vs E1 1D RoPE / learned 2D-RoPE, paired by seed
   python make_tables.py parseq      # E5: PARSeq learned PE vs 2D-RoPE, mean +- sd over seeds
                                     #     + seed-paired difference (reads results/rev1/parseq)
 
@@ -207,6 +208,34 @@ def pe_fs4(res_dir, out_dir, seeds):
           f"  diff {diff['mean']:+.2f} (per seed {', '.join(f'{x:+.2f}' for x in d)})"
           f"  95% CI [{diff['ci95'][0]:+.2f}, {diff['ci95'][1]:+.2f}]  p={diff['p']:.3f}")
     print(f"  decision: {stats['decision']}")
+
+
+# ---------------------------------------------------------------- E8 fixed-frequency 2D-RoPE
+def pe_fixfreq(res_dir, out_dir, seeds):
+    """E8 (Amendment 5, fixed before any E8 run): fixed-frequency 2D-RoPE vs the E1 runs, paired by seed.
+    Primary: fixed 2D-RoPE - 1D RoPE (Avg). Secondary (descriptive): fixed - learned 2D-RoPE (Avg)."""
+    fx, e1 = load_seeds(res_dir, "abl_pe_fixfreq", seeds), load_seeds(res_dir, "abl_pe", seeds)
+    fixed, rope1, learned = "2D-RoPE fixed", "1D RoPE", "2D-RoPE (Ours)"
+    common = sorted(s for s in fx if fixed in fx[s] and s in e1 and {rope1, learned} <= set(e1[s]))
+    if len(common) < 2:
+        raise SystemExit(f"need >= 2 seeds with E8 and E1 results in {res_dir}, found {common}")
+    arm = lambda s, lab: outcomes(fx[s][fixed] if lab == fixed else e1[s][lab])
+    stats, rows = {"seeds": common, "rows": {}}, []
+    for label in [rope1, fixed, learned]:
+        v = {o: np.array([arm(s, label)[o] for s in common]) for o in OUTCOMES}
+        stats["rows"][label] = {o: {"mean": float(x.mean()), "sd": float(x.std(ddof=1)), "values": x.tolist()}
+                                for o, x in v.items()}
+        rows.append(f"{label} & " + " & ".join(fmt(v[b].mean(), v[b].std(ddof=1), 1) for b in BENCH)
+                    + " & " + fmt(v["Avg"].mean(), v["Avg"].std(ddof=1), 2) + f" & {len(common)} \\\\")
+    for key, ref in (("diff_fixed_minus_1drope_avg", rope1), ("diff_fixed_minus_learned_avg", learned)):
+        stats[key] = _paired(np.array([arm(s, fixed)["Avg"] - arm(s, ref)["Avg"] for s in common]))
+    _write(out_dir, "pe_fixfreq", stats, rows)
+    print(f"pe_fixfreq: seeds {common}")
+    for key, name in (("diff_fixed_minus_1drope_avg", "fixed 2D - 1D RoPE (primary)"),
+                      ("diff_fixed_minus_learned_avg", "fixed 2D - learned 2D (secondary)")):
+        d = stats[key]
+        print(f"  {name:34s} {d['mean']:+.2f} (per seed {', '.join(f'{x:+.2f}' for x in d['values'])})"
+              f"  95% CI [{d['ci95'][0]:+.2f}, {d['ci95'][1]:+.2f}]  p={d['p']:.3f}")
 
 
 # ---------------------------------------------------------------- E4 geometric robustness
@@ -495,7 +524,7 @@ def _write(out_dir, name, stats, rows):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("study", choices=["factorial", "pe", "pe_fs4", "geom", "xattn", "full", "parseq"])
+    ap.add_argument("study", choices=["factorial", "pe", "pe_fs4", "pe_fixfreq", "geom", "xattn", "full", "parseq"])
     ap.add_argument("--results", default="results/rev1")
     ap.add_argument("--out_dir", default="results/rev1/tables")
     ap.add_argument("--parseq_results", default="results/rev1/parseq")  # copies of third_party/parseq/results
@@ -504,7 +533,7 @@ def main():
     if args.study == "parseq":
         parseq(args.parseq_results, args.out_dir, args.seeds)
         return
-    {"factorial": factorial, "pe": pe, "pe_fs4": pe_fs4, "geom": geom, "xattn": xattn, "full": full}[args.study](args.results, args.out_dir, args.seeds)
+    {"factorial": factorial, "pe": pe, "pe_fs4": pe_fs4, "pe_fixfreq": pe_fixfreq, "geom": geom, "xattn": xattn, "full": full}[args.study](args.results, args.out_dir, args.seeds)
 
 
 if __name__ == "__main__":
