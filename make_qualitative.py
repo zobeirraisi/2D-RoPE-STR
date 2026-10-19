@@ -293,16 +293,20 @@ def render_attention(model, conv, examples):
     print(f"wrote {out}")
 
 
-def _overlay(ax, raw, sal, vrange=None):
-    """Draw the crop with (optional) jet attention overlay on a 128x32 canvas.
-    vrange=(lo,hi) shares the colour scale across panels; else per-panel min-max."""
+def _overlay(ax, raw, sal, vrange=None, cmap="jet", alpha=0.5, gray=False):
+    """Draw the crop with (optional) attention overlay on a 128x32 canvas.
+    vrange=(lo,hi) shares the colour scale across panels; else per-panel min-max.
+    gray=True draws the crop in grayscale so that its colours do not mix with the colormap."""
     base = raw.resize((128, 32))
-    ax.imshow(base, extent=[0, 128, 32, 0])
+    if gray:
+        ax.imshow(base.convert("L"), cmap="gray", vmin=0, vmax=255, extent=[0, 128, 32, 0])
+    else:
+        ax.imshow(base, extent=[0, 128, 32, 0])
     if sal is not None:
         up = np.kron(sal, np.ones((32 // sal.shape[0], 128 // sal.shape[1])))
         lo, hi = vrange if vrange else (up.min(), up.max())
         up = np.clip((up - lo) / (hi - lo + 1e-8), 0, 1)
-        ax.imshow(up, cmap="jet", alpha=0.5, extent=[0, 128, 32, 0])
+        ax.imshow(up, cmap=cmap, alpha=alpha, extent=[0, 128, 32, 0])
     ax.set_xticks([]); ax.set_yticks([])
 
 

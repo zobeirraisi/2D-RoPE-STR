@@ -1,0 +1,50 @@
+[
+ {
+  "benchmark": "IC15",
+  "direction": "2D-RoPE only",
+  "lmdb_key": 11,
+  "gt": "block",
+  "1D sin.": "elock",
+  "2D-RoPE": "block"
+ },
+ {
+  "benchmark": "IC15",
+  "direction": "1D sin. only",
+  "lmdb_key": 47,
+  "gt": "chevron",
+  "1D sin.": "chevron",
+  "2D-RoPE": "adavidan"
+ },
+ {
+  "benchmark": "CUTE80",
+  "direction": "2D-RoPE only",
+  "lmdb_key": 24,
+  "gt": "arshavin",
+  "1D sin.": "arshavi",
+  "2D-RoPE": "arshavin"
+ },
+ {
+  "benchmark": "CUTE80",
+  "direction": "1D sin. only",
+  "lmdb_key": 64,
+  "gt": "chelsea",
+  "1D sin.": "chelsea",
+  "2D-RoPE": "chelse"
+ },
+ {
+  "benchmark": "SVTP",
+  "direction": "2D-RoPE only",
+  "lmdb_key": 35,
+  "gt": "bookstore",
+  "1D sin.": "bookstop",
+  "2D-RoPE": "bookstore"
+ },
+ {
+  "benchmark": "SVTP",
+  "direction": "1D sin. only",
+  "lmdb_key": 1,
+  "gt": "wyndham",
+  "1D sin.": "wyndham",
+  "2D-RoPE": "windhin"
+ }
+]

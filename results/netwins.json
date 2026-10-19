@@ -1,9 +1,9 @@
 {
   "IIIT5K": {
     "n": 3000,
-    "2drope_only": 38,
+    "2drope_only": 39,
     "1dsin_only": 41,
-    "net": -3
+    "net": -2
   },
   "SVT": {
     "n": 647,
@@ -37,8 +37,8 @@
   },
   "Total": {
     "n": 7672,
-    "2drope_only": 187,
+    "2drope_only": 188,
     "1dsin_only": 150,
-    "net": 37
+    "net": 38
   }
 }

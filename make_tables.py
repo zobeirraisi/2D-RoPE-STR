@@ -11,6 +11,7 @@ Never type these numbers by hand.
   python make_tables.py xattn       # E2 diagnostic: per-layer cross-attention profile, 2D keys vs none
   python make_tables.py pe_fs4      # E7: 1D vs 2D RoPE at stride 4, paired by seed (Amendment 3 rule)
   python make_tables.py pe_fixfreq  # E8: fixed-frequency 2D-RoPE vs E1 1D RoPE / learned 2D-RoPE, paired by seed
+  python make_tables.py netwins     # Table 8: disagreement counts (results/netwins.json) + McNemar tests
   python make_tables.py parseq      # E5: PARSeq learned PE vs 2D-RoPE, mean +- sd over seeds
                                     #     + seed-paired difference (reads results/rev1/parseq)
 
@@ -236,6 +237,32 @@ def pe_fixfreq(res_dir, out_dir, seeds):
         d = stats[key]
         print(f"  {name:34s} {d['mean']:+.2f} (per seed {', '.join(f'{x:+.2f}' for x in d['values'])})"
               f"  95% CI [{d['ci95'][0]:+.2f}, {d['ci95'][1]:+.2f}]  p={d['p']:.3f}")
+
+
+# ---------------------------------------------------------------- Table 8 disagreement analysis
+NETWINS = "results/netwins.json"   # written by make_qualitative.count_netwins (single-run pair of Table 3)
+
+
+def netwins(res_dir, out_dir, seeds):
+    """Table 8: images read correctly by only one model of the single-run 1D-sinusoidal / 2D-RoPE pair, with
+    two-sided McNemar tests (chi-square, 1 df, continuity correction) on the discordant pairs."""
+    src = json.load(open(NETWINS))
+    stats, rows = {"source": NETWINS, "rows": {}}, []
+    for name in BENCH + ["Total"]:
+        e = src[name]
+        b, c = e["2drope_only"], e["1dsin_only"]
+        chi2 = (abs(b - c) - 1) ** 2 / (b + c) if b + c else 0.0
+        p = math.erfc(math.sqrt(chi2 / 2))
+        stats["rows"][name] = {**e, "chi2": chi2, "p": p, "net_points": 100 * (b - c) / e["n"]}
+        cells = [str(e["n"]), str(b), str(c), f"${b - c:+d}$", f"{p:.2f}"]
+        if name == "Total":
+            cells = [rf"\textbf{{{x}}}" for x in cells[:3]] + [rf"$\mathbf{{{b - c:+d}}}$", cells[4]]
+            name = r"\textbf{Total}"
+        rows.append(f"{name} & " + " & ".join(cells) + r" \\")
+    _write(out_dir, "netwins", stats, rows)
+    for name, e in stats["rows"].items():
+        print(f"  {name:7s} n={e['n']:4d}  2D-only={e['2drope_only']:3d}  1D-only={e['1dsin_only']:3d}  net={e['net']:+d}"
+              f"  chi2={e['chi2']:.2f}  p={e['p']:.3f}" + (f"  pooled {e['net_points']:+.3f} points" if name == "Total" else ""))
 
 
 # ---------------------------------------------------------------- E4 geometric robustness
@@ -524,7 +551,7 @@ def _write(out_dir, name, stats, rows):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("study", choices=["factorial", "pe", "pe_fs4", "pe_fixfreq", "geom", "xattn", "full", "parseq"])
+    ap.add_argument("study", choices=["factorial", "pe", "pe_fs4", "pe_fixfreq", "netwins", "geom", "xattn", "full", "parseq"])
     ap.add_argument("--results", default="results/rev1")
     ap.add_argument("--out_dir", default="results/rev1/tables")
     ap.add_argument("--parseq_results", default="results/rev1/parseq")  # copies of third_party/parseq/results
@@ -533,7 +560,7 @@ def main():
     if args.study == "parseq":
         parseq(args.parseq_results, args.out_dir, args.seeds)
         return
-    {"factorial": factorial, "pe": pe, "pe_fs4": pe_fs4, "pe_fixfreq": pe_fixfreq, "geom": geom, "xattn": xattn, "full": full}[args.study](args.results, args.out_dir, args.seeds)
+    {"factorial": factorial, "pe": pe, "pe_fs4": pe_fs4, "pe_fixfreq": pe_fixfreq, "netwins": netwins, "geom": geom, "xattn": xattn, "full": full}[args.study](args.results, args.out_dir, args.seeds)
 
 
 if __name__ == "__main__":

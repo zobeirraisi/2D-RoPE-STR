@@ -4,8 +4,10 @@ images (IJDAR revision, Reviewer 2 comment 4).
 
 Examples are chosen without looking at the predictions: the first N distinct
 words of >= MIN_LEN characters in each benchmark, in LMDB order. Each model's
-prediction is printed under its panel (green = correct, red = wrong), and every
-row shares one colour scale, so the panels are directly comparable.
+prediction is printed under its panel (check mark = correct, cross = wrong; green / red as a
+second cue), and every row shares one colour scale, so the panels are directly comparable.
+The heatmap uses a perceptually uniform colormap (default inferno) over a grayscale copy of
+the crop, so it stays readable in grayscale print and for colour-vision deficiencies.
 
 Saliency = encoder self-attention received by each grid cell, averaged over
 queries, heads and encoder layers (same definition as make_qualitative.py).
@@ -76,6 +78,8 @@ def main():
                     default=["CUTE80", "SVTP", "IC15_2077"])
     ap.add_argument("--per_set", type=int, default=2)
     ap.add_argument("--min_len", type=int, default=5)
+    ap.add_argument("--cmap", default="inferno")
+    ap.add_argument("--alpha", type=float, default=0.6)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
@@ -105,11 +109,12 @@ def main():
                               ha="right", va="center")
         for c, ((label, m), s) in enumerate(zip(models, sals), start=1):
             ax = axes[r, c]
-            mq._overlay(ax, raw, s, vrange)
+            mq._overlay(ax, raw, s, vrange, cmap=args.cmap, alpha=args.alpha, gray=True)
             pred = normalize(mq.predict(m, conv, x))
             ok = pred == normalize(gt)
-            ax.set_xlabel(pred or "(empty)", fontsize=7, family="monospace",
+            ax.set_xlabel(f"{pred or '(empty)'} {'✓' if ok else '✗'}", fontsize=7, family="monospace",
                           color="#1a7f37" if ok else "#c62828", labelpad=1)
+            print(f"    {label}: {pred!r} {'ok' if ok else 'WRONG'}")
             if r == 0:
                 ax.set_title(label, fontsize=8)
         if r == 0:

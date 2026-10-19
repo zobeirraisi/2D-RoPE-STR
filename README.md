@@ -181,11 +181,14 @@ python make_overview_figure.py    # Fig. 1
 python make_geom_figure.py        # Fig. 3
 ```
 
-Disagreement analysis (Table 8) and the attention maps (Fig. 5):
+Disagreement analysis (Table 8), the disagreement examples (Fig. 4) and the attention maps (Fig. 5):
 
 ```bash
-python make_qualitative.py        # Table 8 -> results/netwins.json, and the crops of Fig. 4
+python make_qualitative.py        # Table 8 counts -> results/netwins.json
                                   # (single-run 1D-sinusoidal / 2D-RoPE pair of Table 3)
+python make_tables.py netwins     # Table 8 rows + McNemar p -> results/rev1/tables/netwins_rows.tex
+python make_disagreement_figure.py   # Fig. 4: first disagreement in each direction on CUTE80, SVTP, IC15
+                                     # (rule fixed in advance) -> results/rev1/fig4_disagreements.json
 python make_attention_sbs.py --out fig_attention_sbs.pdf --models \
     "1D sinusoidal=checkpoints_rev1/full_1dsin_s0.pt" "1D RoPE=checkpoints_rev1/full_1drope_s0.pt" \
     "2D-RoPE=checkpoints_rev1/full_2drope_s0.pt"   # Fig. 5 (seeded full-schedule models, 8x32 grid)
