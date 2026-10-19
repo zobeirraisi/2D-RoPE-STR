@@ -71,6 +71,12 @@ STUDIES = {
         "1D RoPE":         dict(pe_type="1drope", feature_stride=4),
         "2D-RoPE (Ours)":  dict(pe_type="2drope", learnable_freq=True, feature_stride=4),
     },
+    "pe_fixfreq": {
+        # E8 (Amendment 5): 2D-RoPE with fixed frequencies (base 10000 on both
+        # axes, as 1D RoPE), otherwise identical to "2D-RoPE (Ours)" in "pe".
+        # Removes the frequency-learning difference from the 1D vs 2D comparison.
+        "2D-RoPE fixed":   dict(pe_type="2drope", learnable_freq=False),
+    },
     "factorial": {
         # 2x2: dimension split x cross-attention keys. All four use the same
         # pre-norm CrossRoPEDecoderLayer stack (cross_pe="none" is the control),
