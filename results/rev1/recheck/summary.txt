@@ -1,0 +1,24 @@
+abl_cross_1d-rope-in-cross-attn          iter  60000  OK
+abl_cross_2d-rope-in-cross-attn          iter  60000  OK
+abl_cross_no-pe-in-cross-attn            iter  60000  OK
+abl_dim_128-384-25-75                    iter  60000  OK
+abl_dim_256-256-50-50                    iter  60000  OK
+abl_dim_384-128-75-25                    iter  60000  OK
+abl_freq_fixed-theta-10000               iter  60000  OK
+abl_freq_fixed-theta-500                 iter  60000  OK
+abl_freq_learnable-beta                  iter  60000  OK
+abl_freq_mixed-row500-col10000           iter  60000  OK
+abl_layers_12-layers                     iter  60000  OK
+abl_layers_3-layers                      iter  60000  OK
+abl_layers_6-layers                      iter  60000  OK
+abl_layers_9-layers                      iter  60000  OK
+abl_pe_1d-learnable                      iter  60000  OK
+abl_pe_1d-rope                           iter  60000  OK
+abl_pe_1d-sinusoidal                     iter  60000  OK
+abl_pe_2d-learnable                      iter  60000  OK
+abl_pe_2d-rope-ours                      iter  60000  OK
+abl_pe_2d-sinusoidal                     iter  60000  OK
+abl_pe_none                              iter  60000  OK
+full_2drope                              iter 300000  OK
+
+0 of 22 runs differ (re-evaluated minus stored correct counts per benchmark)

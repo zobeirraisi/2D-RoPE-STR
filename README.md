@@ -131,6 +131,13 @@ for s in 0 1 2; do
       --batch_size 128 --accum_steps 2 --amp --train_sources MJ ST --seed $s \
       --save_dir checkpoints_rev1 --resume --out results/rev1/abl_pe_fs4_s$s.json
 done
+
+# Table 5 (4x16 block): 2D-RoPE with fixed frequencies (no learnable scales), seeds 0-2
+for s in 0 1 2; do
+  python run_ablations.py --study pe_fixfreq --iters 60000 --feature_stride 8 --amp \
+      --train_sources MJ ST --seed $s --save_dir checkpoints_rev1 --resume \
+      --out results/rev1/abl_pe_fixfreq_s$s.json
+done
 ```
 
 Always pass `--train_sources MJ ST` and `--seed`.
@@ -172,6 +179,7 @@ drawn in Fig. 3), `results/rev1/xattn/` (per-layer cross-attention values), and 
 ```bash
 python make_tables.py pe          # Table 3 multi-seed column + paired differences to 2D-RoPE
 python make_tables.py pe_fs4      # Table 5 + paired difference and pre-specified decision rule
+python make_tables.py pe_fixfreq  # Table 5 (4x16 block) + paired differences (fixed 2D-RoPE vs 1D RoPE / learned)
 python make_tables.py factorial   # Table 6 + main effects / interaction (seed-blocked)
 python make_tables.py geom        # Fig. 3 data + paired differences in accuracy drop + full-schedule rows
 python make_tables.py xattn       # per-layer cross-attention profile
