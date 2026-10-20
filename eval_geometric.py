@@ -1,5 +1,5 @@
 """
-E4: robustness to controlled geometric transformations (IJDAR revision, R1-4).
+Robustness to controlled geometric transformations (paper, Sec. 4.5 and Fig. 3).
 
 Every image of the six benchmarks (7,672 in total) is transformed and the
 model is re-evaluated:

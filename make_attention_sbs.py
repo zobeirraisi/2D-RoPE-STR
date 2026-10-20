@@ -1,6 +1,6 @@
 """
 Side-by-side encoder self-attention for several positional encodings on the SAME
-images (IJDAR revision, Reviewer 2 comment 4).
+images (paper, Fig. 5).
 
 Examples are chosen without looking at the predictions: the first N distinct
 words of >= MIN_LEN characters in each benchmark, in LMDB order. Each model's

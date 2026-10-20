@@ -85,7 +85,7 @@
     "points": 0.4806974353683273
    }
   },
-  "released 2D-RoPE (June) - 1D RoPE, same pipeline (ours)": {
+  "released 2D-RoPE (unseeded) - 1D RoPE, same pipeline (ours)": {
    "IIIT5K": {
     "points": -0.03333333333333144,
     "images": -1
@@ -114,7 +114,7 @@
     "points": 0.6726015964637355
    }
   },
-  "released 2D-RoPE (June) - 1D sinusoidal, same pipeline (ours)": {
+  "released 2D-RoPE (unseeded) - 1D sinusoidal, same pipeline (ours)": {
    "IIIT5K": {
     "points": 0.1666666666666714,
     "images": 5

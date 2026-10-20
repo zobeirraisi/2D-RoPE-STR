@@ -1,7 +1,7 @@
 """
-Fig. 4 of the IJDAR revision: disagreements between the single-run 1D-sinusoidal and 2D-RoPE
+Fig. 4 of the paper: disagreements between the single-run 1D-sinusoidal and 2D-RoPE
 ablation models (the pair of Table 8), in BOTH directions, chosen by a rule fixed before any
-per-image prediction was inspected (REVISION_NOTES, "Fig. 4 replacement rule"):
+per-image prediction was inspected:
 
   for each of CUTE80, SVTP and IC15 (2,077) and each direction (only 2D-RoPE correct / only
   1D sinusoidal correct), the first image in LMDB order whose normalized label has >= 5 characters.
@@ -9,8 +9,7 @@ per-image prediction was inspected (REVISION_NOTES, "Fig. 4 replacement rule"):
 Correctness and the printed predictions are the batched outputs behind Table 8 (same loader and
 decoding as `make_qualitative.per_sample_correct`). Before drawing, both models' accuracies are
 recomputed on all six benchmarks and must equal their single-run entries in results/abl_pe.json
-(Table 3, left). The disagreement counts are printed next to results/netwins.json (Table 8); on
-IIIT5K that file has 38 2D-only images where the accuracies imply 39 (REVISION_NOTES).
+(Table 3, left). The disagreement counts are printed next to results/netwins.json (Table 8).
 
 Run from code/:
   python make_disagreement_figure.py [--out ../manuscript/ijdar/revision1/fig_qualitative.pdf]

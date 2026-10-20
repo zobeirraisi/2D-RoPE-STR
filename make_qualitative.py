@@ -1,6 +1,6 @@
 """
-Generate REAL qualitative + ablation figures for the manuscript from the
-trained ablation checkpoints (no fabrication).
+Qualitative examples, disagreement counts (Table 8), and ablation plots, computed from the
+trained ablation checkpoints.
 
   fig_qualitative.png : real eval crops where 2D-RoPE reads the word correctly
                         and the 1D-sinusoidal baseline does not. Both models are

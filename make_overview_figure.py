@@ -1,10 +1,10 @@
 """
-Figure 1 of the IJDAR revision:
+Fig. 1 of the paper:
 (a) how position enters the attention score for additive encodings, 1D RoPE, 2D-RoPE, and the
     key-only rotation in decoder cross-attention (Proposition 1);
 (b) forest plot of every multi-seed controlled comparison in the paper: seed-paired difference in
     average accuracy (mean, 95% CI, individual seeds), oriented so that positive favors 2D-RoPE
-    or the adaptation. The fixed-frequency row (E8) appears once pe_fixfreq.json exists.
+    or the adaptation. The fixed-frequency row appears once pe_fixfreq.json exists.
 Numbers are read from results/rev1/tables/{pe,pe_fs4,pe_fixfreq,factorial,parseq}.json (written by
 `make_tables.py`); never type numbers here. The figure is drawn at the sn-jnl text width without a tight
 bounding box, so the font sizes below are the printed sizes.
@@ -128,7 +128,7 @@ def comparisons(tables):
     enc.sort(key=lambda r: r[1])
     d = fs4["diff_2d_minus_1d_avg"]
     rope = [vs_pe("1D RoPE", "4×16 grid"), ("8×32 grid", d["mean"], tuple(d["ci95"]), d["values"])]
-    if os.path.exists(os.path.join(tables, "pe_fixfreq.json")):   # E8, Amendment 5
+    if os.path.exists(os.path.join(tables, "pe_fixfreq.json")):   # matched fixed-frequency control
         d = load("pe_fixfreq")["diff_fixed_minus_1drope_avg"]
         rope.insert(1, ("4×16 grid, fixed frequencies", d["mean"], tuple(d["ci95"]), d["values"]))
     cells = {k: v["Avg"]["values"] for k, v in fac["cells"].items()}

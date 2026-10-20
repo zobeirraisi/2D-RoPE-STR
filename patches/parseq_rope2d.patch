@@ -4,7 +4,7 @@ Date: Fri, 9 Oct 2026 07:58:59 +0330
 Subject: [PATCH] 2D-RoPE option for the ViT encoder (pos_enc=rope2d), seeding,
  final.ckpt, swa_base_lr, JSON eval
 
-For the 2D-RoPE-STR IJDAR revision (E5): replace the learned additive position
+For the 2D-RoPE-STR transfer experiment (paper, Table 7): replace the learned additive position
 embedding with axial 2D-RoPE (equal split, base 10000, learnable per-axis
 scales) in every encoder block; everything else unchanged.
 

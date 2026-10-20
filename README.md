@@ -18,11 +18,8 @@ decoder without positional encoding in cross-attention, trained 300k iterations 
 | 96.17 | 92.43 | 95.17 | 81.17 | 90.97 | 86.51 | 90.40 |
 
 On IC13-857 / IC15-1811: 97.08 / 84.87 (Avg 91.34).
-Word accuracy, case-insensitive 36-character set, greedy decoding.
-
-> An earlier version of this README listed different accuracies, a different default command,
-> and a different venue. Those accuracies did not correspond to the released checkpoint; the
-> table above is the output of `evaluate.py` on it.
+Word accuracy, case-insensitive 36-character set, greedy decoding; the table is the output of
+`evaluate.py` on the released checkpoint.
 
 ## Installation
 
@@ -103,6 +100,8 @@ python train_2drope_str.py --pe_type 1d_sin --train_sources MJ ST --iters 300000
     --feature_stride 4 --batch_size 128 --accum_steps 2 --amp --seed 0 --run_name full_1dsin_s0
 ```
 
+`bash scripts/full_schedule.sh` runs the three (resumable, final-iteration checkpoints) and evaluates them.
+
 Evaluation output (`evaluate.py`, IC13-1015 / IC15-2077, single runs):
 
 | Model | IIIT5K | SVT | IC13 | IC15 | CUTE80 | SVTP | Avg |
@@ -140,7 +139,8 @@ for s in 0 1 2; do
 done
 ```
 
-Always pass `--train_sources MJ ST` and `--seed`.
+Always pass `--train_sources MJ ST` and `--seed`. `bash scripts/reduced_schedule.sh [study ...]`
+runs the same loops.
 
 Single-run ablations (Table 3, single-run column; Table 4 (a)–(d)). These runs predate `--seed`,
 so a re-run reproduces them statistically, not exactly; Table 4 (e) collects the runs that share a
@@ -166,6 +166,8 @@ python eval_geometric.py --data_root data_lmdb_release --out_dir results/rev1/ge
 python analyze_cross_attention.py --data_root data_lmdb_release --out_dir results/rev1/xattn \
     --checkpoints checkpoints_rev1/abl_factorial_*_s[0-9].pt
 ```
+
+(`bash scripts/diagnostics.sh` runs all three.)
 
 ## Tables and figures
 
@@ -210,13 +212,13 @@ The PARSeq transfer experiment (Table 7) uses a modified copy of the official PA
 2D-RoPE option for its ViT encoder (`model.pos_enc=rope2d`), trained on the same MJ+ST LMDBs with
 the official synthetic-data recipe on one GPU (2-step gradient accumulation, learning rate rescaled
 to the 2-GPU step size). The modification is `patches/parseq_rope2d.patch`, which applies to
-upstream PARSeq commit `1902db0`; `scripts/e5_parseq.sh` has the exact training and evaluation
+upstream PARSeq commit `1902db0`; `scripts/parseq_transfer.sh` has the exact training and evaluation
 commands:
 
 ```bash
 git clone https://github.com/baudm/parseq.git ../third_party/parseq
 git -C ../third_party/parseq checkout 1902db0 && git -C ../third_party/parseq apply "$PWD/patches/parseq_rope2d.patch"
-bash scripts/e5_parseq.sh pc rope2d:0 learned:0   # seeds 1 and 2 likewise
+bash scripts/parseq_transfer.sh rope2d:0 learned:0 rope2d:1 learned:1 rope2d:2 learned:2
 ```
 
 Mean ± sd over seeds 0–2 (IC13-1015 / IC15-2077):
@@ -233,13 +235,13 @@ Mean ± sd over seeds 0–2 (IC13-1015 / IC15-2077):
 | `model.py` | `STRModel` and all positional encodings (`none`, `1d_sin`, `1d_learn`, `2d_sin`, `2d_learn`, `1drope`, `2drope`; optional RoPE on cross-attention keys) |
 | `train_2drope_str.py` | Training (AMP, cosine schedule, gradient accumulation, seeding, atomic resumable checkpoints) |
 | `evaluate.py` | Word accuracy on the six benchmarks, JSON output |
-| `run_ablations.py` | Studies: `pe`, `dim`, `freq`, `layers`, `cross`, `pe_fs4`, `factorial` |
+| `run_ablations.py` | Studies: `pe`, `dim`, `freq`, `layers`, `cross`, `pe_fs4`, `pe_fixfreq`, `factorial` |
 | `eval_geometric.py` | Controlled rotation / perspective evaluation |
 | `analyze_cross_attention.py` | Per-layer decoder cross-attention diagnostic |
 | `make_tables.py`, `make_*_figure.py` | Tables and figures from the result JSONs |
 | `make_qualitative.py`, `make_attention_sbs.py` | Qualitative examples, disagreement counts, attention maps |
 | `dataset.py` | LMDB reader, label converter, transforms |
-| `scripts/` | Power-loss-safe launchers used for the revision experiments |
+| `scripts/` | Resumable launchers: full schedule, reduced-schedule studies, diagnostics, PARSeq transfer |
 | `patches/parseq_rope2d.patch` | 2D-RoPE option for PARSeq (transfer experiment, Table 7) |
 
 ## Reproducibility

@@ -1,17 +1,16 @@
 """
-Cross-attention diagnostic for the factorial / cross-attention ablations (IJDAR revision, R1-3).
+Cross-attention diagnostic for the factorial models (paper, Sec. 4.4.4).
 
-Proposition 1 says that rotating only the encoder keys gives each decoder query a way to
-address *absolute* 2D locations. With a 2D-RoPE encoder (relative only), the memory has no
-explicit absolute position otherwise, so the prediction is that rotated keys help the decoder
-keep its place in the reading order. We test this on the decoder cross-attention maps, under
-teacher forcing on the ground-truth string, for every test image:
+By Proposition 1, rotating only the encoder keys makes the cross-attention score depend on the
+absolute 2D coordinates of the keys. We ask whether this changes the spatial distribution of the
+decoder cross-attention, for example by making it follow the reading order more closely. The maps
+are computed under teacher forcing on the ground-truth string, for every test image:
 
   spread       attention-weighted std of the attended grid position (in grid cells),
                averaged over character steps
   entropy      normalised entropy of the attention distribution (0 = one cell, 1 = uniform)
   backtrack    fraction of consecutive character steps whose attention centroid moves
-               left by more than half a cell (a reading-order violation)
+               left by more than half a cell (a proxy for a reading-order violation)
   backtrack_peak  the same with the column of the attention peak (robust to diffuse maps)
 
 Attention is averaged over heads; metrics are stored for every decoder layer (L1..L6), the last

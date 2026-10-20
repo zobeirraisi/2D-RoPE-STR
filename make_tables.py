@@ -1,23 +1,23 @@
 """
-Generate the multi-seed tables and statistics of the IJDAR revision from the result JSONs.
+Generate the multi-seed tables and statistics of the paper from the result JSONs.
 Never type these numbers by hand.
 
-  python make_tables.py factorial   # E2: Table 5 rows + main effects / interaction
-  python make_tables.py pe          # E1: multi-seed column of Table 3 + paired differences to 2D-RoPE
-  python make_tables.py geom        # E4: rotation / perspective sweep, mean +- sd over training seeds
+  python make_tables.py factorial   # Table 6 rows + main effects / interaction
+  python make_tables.py pe          # multi-seed column of Table 3 + paired differences to 2D-RoPE
+  python make_tables.py geom        # Fig. 3: rotation / perspective sweep, mean +- sd over training seeds
                                     #     + seed-paired differences in the drop from clean accuracy
-                                    #     + full-schedule checkpoints (Amendment 4, n = 1, descriptive)
-  python make_tables.py full        # E3: full-schedule rows of Table 1 (one run each, 1 decimal)
-  python make_tables.py xattn       # E2 diagnostic: per-layer cross-attention profile, 2D keys vs none
-  python make_tables.py pe_fs4      # E7: 1D vs 2D RoPE at stride 4, paired by seed (Amendment 3 rule)
-  python make_tables.py pe_fixfreq  # E8: fixed-frequency 2D-RoPE vs E1 1D RoPE / learned 2D-RoPE, paired by seed
+                                    #     + full-schedule checkpoints (n = 1, descriptive)
+  python make_tables.py full        # full-schedule rows of Table 2 (one run each, 1 decimal)
+  python make_tables.py xattn       # factorial diagnostic: per-layer cross-attention profile, 2D keys vs none
+  python make_tables.py pe_fs4      # Table 5: 1D vs 2D RoPE at stride 4, paired by seed (pre-specified rule)
+  python make_tables.py pe_fixfreq  # Table 5 (4x16 block): fixed-frequency 2D-RoPE vs 1D RoPE / learned 2D-RoPE, paired by seed
   python make_tables.py netwins     # Table 8: disagreement counts (results/netwins.json) + McNemar tests
-  python make_tables.py parseq      # E5: PARSeq learned PE vs 2D-RoPE, mean +- sd over seeds
+  python make_tables.py parseq      # Table 7: PARSeq learned PE vs 2D-RoPE, mean +- sd over seeds
                                     #     + seed-paired difference (reads results/rev1/parseq)
 
 Outputs go to results/rev1/tables/ (<study>.json with all statistics, <study>_rows.tex).
 
-Analysis of the 2x2 factorial (fixed before the E2 results were seen):
+Analysis of the 2x2 factorial (fixed before the factorial results were seen):
   outcomes   Avg (unweighted mean of six), Regular = pooled accuracy over the 4,662 images of
              IIIT5K+SVT+IC13, Irregular = pooled accuracy over the 3,010 images of
              IC15+CUTE80+SVTP, and each benchmark
@@ -183,9 +183,9 @@ def pe(res_dir, out_dir, seeds):
             print(f"  {label:16s} n={len(e['seeds'])}  Avg {e['Avg']['mean']:.2f} +- {sd}{extra}")
 
 
-# ---------------------------------------------------------------- E7 1D vs 2D RoPE at stride 4
+# ---------------------------------------------------------------- 1D vs 2D RoPE at stride 4
 def pe_fs4(res_dir, out_dir, seeds):
-    """E7 (Amendment 3 rule, fixed before any E7 result): 2D-RoPE - 1D RoPE at feature stride 4,
+    """Table 5 (rule fixed before any result): 2D-RoPE - 1D RoPE at feature stride 4,
     paired by seed. 'Helps' only if the mean paired Avg difference >= 0.5 AND 2D > 1D in every seed."""
     runs = load_seeds(res_dir, "abl_pe_fs4", seeds)
     common = sorted(s for s in runs if {"1D RoPE", "2D-RoPE (Ours)"} <= set(runs[s]))
@@ -211,15 +211,15 @@ def pe_fs4(res_dir, out_dir, seeds):
     print(f"  decision: {stats['decision']}")
 
 
-# ---------------------------------------------------------------- E8 fixed-frequency 2D-RoPE
+# ---------------------------------------------------------------- fixed-frequency 2D-RoPE
 def pe_fixfreq(res_dir, out_dir, seeds):
-    """E8 (Amendment 5, fixed before any E8 run): fixed-frequency 2D-RoPE vs the E1 runs, paired by seed.
+    """Table 5, 4x16 block (fixed before any run): fixed-frequency 2D-RoPE vs the Table 3 runs, paired by seed.
     Primary: fixed 2D-RoPE - 1D RoPE (Avg). Secondary (descriptive): fixed - learned 2D-RoPE (Avg)."""
     fx, e1 = load_seeds(res_dir, "abl_pe_fixfreq", seeds), load_seeds(res_dir, "abl_pe", seeds)
     fixed, rope1, learned = "2D-RoPE fixed", "1D RoPE", "2D-RoPE (Ours)"
     common = sorted(s for s in fx if fixed in fx[s] and s in e1 and {rope1, learned} <= set(e1[s]))
     if len(common) < 2:
-        raise SystemExit(f"need >= 2 seeds with E8 and E1 results in {res_dir}, found {common}")
+        raise SystemExit(f"need >= 2 seeds with pe_fixfreq and pe results in {res_dir}, found {common}")
     arm = lambda s, lab: outcomes(fx[s][fixed] if lab == fixed else e1[s][lab])
     stats, rows = {"seeds": common, "rows": {}}, []
     for label in [rope1, fixed, learned]:
@@ -265,7 +265,7 @@ def netwins(res_dir, out_dir, seeds):
               f"  chi2={e['chi2']:.2f}  p={e['p']:.3f}" + (f"  pooled {e['net_points']:+.3f} points" if name == "Total" else ""))
 
 
-# ---------------------------------------------------------------- E4 geometric robustness
+# ---------------------------------------------------------------- geometric robustness (Fig. 3)
 # (label in the table, JSON file tag). Factorial cells are evaluated in the same sweep.
 GEOM_ROWS = [
     ("None", "abl_pe_none"), ("1D Sinusoidal", "abl_pe_1d-sinusoidal"), ("1D Learnable", "abl_pe_1d-learnable"),
@@ -353,10 +353,11 @@ def geom(res_dir, out_dir, seeds):
               + "".join(f"  {k.split(':')[1]}:{e[k]['mean']:.2f}" for k in e if ':' in k))
 
 
-# Amendment 4 (fixed before the E3b/E3c results): full-schedule checkpoints, one run per arm, so the
-# comparison is descriptive. A difference in the drop between two arms is called a difference only if
-# it exceeds the E1 seed spread at that level: the largest range (max - min over seeds) of the drop
-# among the seven E1 encodings. The June model is a descriptive extra row, outside the comparison.
+# Full-schedule checkpoints (rule fixed before their results): one run per arm, so the comparison is
+# descriptive. A difference in the drop between two arms is called a difference only if it exceeds the
+# seed spread of the Table 3 runs (e1_*) at that level: the largest range (max - min over seeds) of the
+# drop among the seven encodings. The released (unseeded) model is a descriptive extra row, outside the
+# comparison.
 GEOM_FULL_ROWS = [("2D-RoPE, seed 0", "full_2drope_s0"), ("1D RoPE, seed 0", "full_1drope_s0"),
                   ("1D sinusoidal, seed 0", "full_1dsin_s0"), ("2D-RoPE, released (unseeded)", "full_2drope_best")]
 
@@ -382,9 +383,9 @@ def _geom_full(geo_dir, stats):
             k = f"{kind}:{lv}"
             out["e1_drop_range"][k] = max(float(np.ptp(np.array(x["clean"]["values"]) - np.array(x[k]["values"])))
                                           for x in e1)
-    # "E1 seed spread" is not defined further in Amendment 4; both readings are reported:
-    # e1_range = largest range among all seven E1 encodings, e1_range_pair = larger range of the two
-    # E1 encodings being compared (narrower, so more differences can exceed it).
+    # The seed spread can be read in two ways; both are reported:
+    # e1_range = largest range among all seven Table 3 encodings, e1_range_pair = larger range of the
+    # two encodings being compared (narrower, so more differences can exceed it).
     def e1_range(enc, k):
         x = stats["rows"][enc]
         return float(np.ptp(np.array(x["clean"]["values"]) - np.array(x[k]["values"])))
@@ -401,7 +402,7 @@ def _geom_full(geo_dir, stats):
             res[k] = {"diff": d, "e1_range": rng, "exceeds": bool(abs(d) > rng),
                       "e1_range_pair": pair, "exceeds_pair": bool(abs(d) > pair)}
         out["drop_minus_2drope"][label] = res
-        print(f"  full: drop({label}) - drop(2D-RoPE s0)  [diff (E1 max range / pair range), ! = exceeds]: " + "  ".join(
+        print(f"  full: drop({label}) - drop(2D-RoPE s0)  [diff (max seed range / pair range), ! = exceeds]: " + "  ".join(
             f"{k.split(':')[1]}:{v['diff']:+.2f}({v['e1_range']:.2f}{'!' if v['exceeds'] else ''}"
             f"/{v['e1_range_pair']:.2f}{'!' if v['exceeds_pair'] else ''})" for k, v in res.items()))
     for label, e in out["rows"].items():
@@ -420,7 +421,7 @@ def _paired(d):
     return {"mean": m, "sd": sd, "ci95": [m - tc * se, m + tc * se], "p": p, "values": [float(x) for x in d]}
 
 
-# ---------------------------------------------------------------- E2 cross-attention diagnostic
+# ---------------------------------------------------------------- cross-attention diagnostic
 XATTN_METRICS = ["spread", "entropy", "backtrack", "backtrack_peak"]
 
 
@@ -479,13 +480,13 @@ def full(res_dir, out_dir, seeds):
         stats[label] = r
         rows.append(f"{label} & " + " & ".join(f"{r[b]:.1f}" for b in BENCH) + f" & {r['Avg']:.2f} \\\\")
         print("  " + rows[-1])
-    # Differences of the seeded 2D-RoPE run (and of the released June model) to each 1D run, in points
-    # and in images (accuracy x n / 100), for the text next to Table 1. Single runs: descriptive only.
-    june_p = os.path.join(os.path.dirname(res_dir.rstrip("/")), "full_2drope_allsplits.json")
+    # Differences of the seeded 2D-RoPE run (and of the released unseeded model) to each 1D run, in points
+    # and in images (accuracy x n / 100), for the text next to Table 2. Single runs: descriptive only.
+    released_p = os.path.join(os.path.dirname(res_dir.rstrip("/")), "full_2drope_allsplits.json")
     refs = {k: stats[k] for k in [FULL_ROWS[0][0]] if k in stats}
-    if os.path.exists(june_p):
-        j = json.load(open(june_p))
-        refs["released 2D-RoPE (June)"] = {**{b: j[b] for b in ["IIIT5K", "SVT", "CUTE80", "SVTP"]},
+    if os.path.exists(released_p):
+        j = json.load(open(released_p))
+        refs["released 2D-RoPE (unseeded)"] = {**{b: j[b] for b in ["IIIT5K", "SVT", "CUTE80", "SVTP"]},
                                            "IC13": j["IC13_1015"], "IC15": j["IC15_2077"], "Avg": j["Avg_1015_2077"]}
     stats["differences"] = {}
     for rname, ref in refs.items():
@@ -505,7 +506,7 @@ PARSEQ_ROWS = [("PARSeq (learned PE)", "parseq_learned"), ("PARSeq + 2D-RoPE", "
 
 
 def parseq(res_dir, out_dir, seeds):
-    """E5: rows per protocol (1015/2077 and 857/1811), mean +- sd over the seeds both arms finished;
+    """Table 7: rows per protocol (1015/2077 and 857/1811), mean +- sd over the seeds both arms finished;
     2D-RoPE - learned, paired by seed (each pair was trained on the same GPU)."""
     runs = {stem: load_seeds(res_dir, stem, seeds) for _, stem in PARSEQ_ROWS}
     common = sorted(set.intersection(*[set(r) for r in runs.values()]))

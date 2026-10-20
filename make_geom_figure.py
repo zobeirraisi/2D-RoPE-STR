@@ -1,7 +1,7 @@
 """
-E4 figure for the IJDAR revision: accuracy under controlled rotation / perspective (top) and the
+Fig. 3 of the paper: accuracy under controlled rotation / perspective (top) and the
 seed-paired difference in accuracy drop relative to 2D-RoPE (bottom). The top panels also show the
-full-schedule checkpoints (Amendment 4; one run each, dashed, hollow markers). Reads only
+full-schedule checkpoints (one run each, dashed, hollow markers). Reads only
 results/rev1/tables/geom.json (written by `make_tables.py geom`); never type numbers here.
 
   python make_geom_figure.py [--out ../manuscript/ijdar/revision1/fig_geom.pdf]
